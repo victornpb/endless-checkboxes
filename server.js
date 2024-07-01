@@ -74,8 +74,8 @@ wss.on('connection', (socket, req) => {
         const data = JSON.parse(message);
         if (data.type === 'requestGrid') {
             clientViewports.set(socket, data.viewPort);
-            const viewPortData = getViewPortData(data.viewPort);
-            socket.send(JSON.stringify(viewPortData));
+            const res = sendGridData(data.viewPort);
+            socket.send(JSON.stringify(res));
         } else if (data.type === 'toggleBox') {
             const key = `${data.x},${data.y}`;
             toggleGridCell(data.x, data.y);
@@ -165,16 +165,30 @@ function getGridCell(x, y) {
     return chunk[index];
 }
 
-function getViewPortData(viewPort) {
+function sendGridData(viewPort) {
     const { startX, startY, endX, endY } = viewPort;
-    const result = {};
+    
+    const gridArray = [];
     for (let y = startY; y <= endY; y++) {
         for (let x = startX; x <= endX; x++) {
-            const key = `${x},${y}`;
-            result[key] = getGridCell(x, y);
+            gridArray.push(getGridCell(x, y));
         }
     }
-    return result;
+
+    const message = {
+        type: 'gridData',
+        header: {
+            startX,
+            startY,
+            endX,
+            endY,
+            width: endX - startX + 1,
+            height: endY - startY + 1,
+            totalSize: gridArray.length
+        },
+        data: gridArray
+    };
+    return message;
 }
 
 function isInViewport(x, y, viewport) {

@@ -184,7 +184,7 @@
             const data = JSON.parse(message.data);
             if (data.type === 'stats') {
                 updateStats(data);
-            } else {
+            } else if (data.type === 'gridData') {
                 updateGridData(data);
                 drawGrid();
             }
@@ -216,9 +216,14 @@
             return { startX, startY, endX, endY };
         }
 
-        function updateGridData(data) {
-            for (const key in data) {
-                gridData[key] = data[key];
+        function updateGridData({ header, data }) {
+            const { startX, startY, width, height } = header;
+            let index = 0;
+            for (let y = startY; y < startY + height; y++) {
+                for (let x = startX; x < startX + width; x++) {
+                    const key = `${x},${y}`;
+                    gridData[key] = data[index++];
+                }
             }
         }
 
