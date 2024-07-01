@@ -20,8 +20,18 @@
     <script>
         const canvas = document.getElementById('gridCanvas');
         const ctx = canvas.getContext('2d');
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        let dpr;
+
+        function resizeCanvas() {
+            dpr = window.devicePixelRatio || 1;
+            canvas.width = window.innerWidth * dpr;
+            canvas.height = window.innerHeight * dpr;
+            canvas.style.width = `${window.innerWidth}px`;
+            canvas.style.height = `${window.innerHeight}px`;
+            ctx.scale(dpr, dpr);
+        }
+
+        resizeCanvas();
 
         const boxSize = 15;
         const spacing = 1;
@@ -32,8 +42,12 @@
         let lastX, lastY;
         let gridData = {};
         let loadedViewport = {};
+        let touchStartTime, touchStartX, touchStartY;
 
-        const socket = new WebSocket('ws://localhost:8080');
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        const wsUrl = `${protocol}//${host}/ws`;
+        const socket = new WebSocket(wsUrl);
 
         socket.onopen = () => {
             console.log('WebSocket connection established');
@@ -60,8 +74,8 @@
         function getViewPort() {
             const startX = Math.floor(offsetX / (boxSize + spacing));
             const startY = Math.floor(offsetY / (boxSize + spacing));
-            const endX = Math.ceil((offsetX + canvas.width) / (boxSize + spacing));
-            const endY = Math.ceil((offsetY + canvas.height) / (boxSize + spacing));
+            const endX = Math.ceil((offsetX + canvas.width / dpr) / (boxSize + spacing));
+            const endY = Math.ceil((offsetY + canvas.height / dpr) / (boxSize + spacing));
             return { startX, startY, endX, endY };
         }
 
@@ -113,10 +127,22 @@
             }
         }
 
+        function getScaledCoordinates(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            return {
+                x: (e.clientX - rect.left) * scaleX,
+                y: (e.clientY - rect.top) * scaleY
+            };
+        }
+
+        // Mouse events
         canvas.addEventListener('mousedown', (e) => {
+            const coords = getScaledCoordinates(e);
             dragging = true;
-            lastX = e.clientX;
-            lastY = e.clientY;
+            lastX = coords.x;
+            lastY = coords.y;
         });
 
         canvas.addEventListener('mouseup', (e) => {
@@ -126,17 +152,65 @@
 
         canvas.addEventListener('mousemove', (e) => {
             if (dragging) {
-                offsetX += lastX - e.clientX;
-                offsetY += lastY - e.clientY;
-                lastX = e.clientX;
-                lastY = e.clientY;
+                const coords = getScaledCoordinates(e);
+                offsetX += (lastX - coords.x) / dpr;
+                offsetY += (lastY - coords.y) / dpr;
+                lastX = coords.x;
+                lastY = coords.y;
+                drawGrid();
+            }
+        });
+
+        // Touch events
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                const coords = getScaledCoordinates(e.touches[0]);
+                dragging = true;
+                lastX = coords.x;
+                lastY = coords.y;
+                touchStartTime = Date.now();
+                touchStartX = lastX;
+                touchStartY = lastY;
+            }
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            if (Date.now() - touchStartTime < 300 && Math.abs(touchStartX - lastX) < 5 && Math.abs(touchStartY - lastY) < 5) {
+                const coords = { x: touchStartX, y: touchStartY };
+                const touchX = Math.floor((coords.x + offsetX) / (boxSize + spacing));
+                const touchY = Math.floor((coords.y + offsetY) / (boxSize + spacing));
+                const key = `${touchX},${touchY}`;
+                gridData[key] = !gridData[key];
+                socket.send(JSON.stringify({ type: 'toggleBox', x: touchX, y: touchY }));
+                drawGrid();
+            }
+            dragging = false;
+            checkIfNeedNewGridData();
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (dragging && e.touches.length === 1) {
+                const coords = getScaledCoordinates(e.touches[0]);
+                offsetX += (lastX - coords.x) / dpr;
+                offsetY += (lastY - coords.y) / dpr;
+                lastX = coords.x;
+                lastY = coords.y;
                 drawGrid();
             }
         });
 
         canvas.addEventListener('click', (e) => {
-            const clickX = Math.floor((e.clientX + offsetX) / (boxSize + spacing));
-            const clickY = Math.floor((e.clientY + offsetY) / (boxSize + spacing));
+
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const coords = {
+                x: (e.clientX - rect.left) ,
+                y: (e.clientY - rect.top) 
+            };
+
+            const clickX = Math.floor((coords.x + offsetX ) / (boxSize + spacing));
+            const clickY = Math.floor((coords.y + offsetY ) / (boxSize + spacing));
             const key = `${clickX},${clickY}`;
             gridData[key] = !gridData[key];
             socket.send(JSON.stringify({ type: 'toggleBox', x: clickX, y: clickY }));
@@ -144,12 +218,9 @@
         });
 
         window.addEventListener('resize', () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            resizeCanvas();
             requestGridData();
         });
-
-        requestGridData();
     </script>
 </body>
 </html>
