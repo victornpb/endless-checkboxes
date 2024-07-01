@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiplayer Grid</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            background: #ddd;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gridCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gridCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const boxSize = 15;
+        const spacing = 1;
+        const preloadMargin = 10; // Number of extra boxes to load around the viewport
+        let offsetX = 0;
+        let offsetY = 0;
+        let dragging = false;
+        let lastX, lastY;
+        let gridData = {};
+        let loadedViewport = {};
+
+        const socket = new WebSocket('ws://localhost:8080');
+
+        socket.onopen = () => {
+            console.log('WebSocket connection established');
+            requestGridData();
+        };
+
+        socket.onmessage = (message) => {
+            const data = JSON.parse(message.data);
+            updateGridData(data);
+            drawGrid();
+        };
+
+        function requestGridData() {
+            const viewPort = getViewPort();
+            loadedViewport = {
+                startX: viewPort.startX - preloadMargin,
+                startY: viewPort.startY - preloadMargin,
+                endX: viewPort.endX + preloadMargin,
+                endY: viewPort.endY + preloadMargin,
+            };
+            socket.send(JSON.stringify({ type: 'requestGrid', viewPort: loadedViewport }));
+        }
+
+        function getViewPort() {
+            const startX = Math.floor(offsetX / (boxSize + spacing));
+            const startY = Math.floor(offsetY / (boxSize + spacing));
+            const endX = Math.ceil((offsetX + canvas.width) / (boxSize + spacing));
+            const endY = Math.ceil((offsetY + canvas.height) / (boxSize + spacing));
+            return { startX, startY, endX, endY };
+        }
+
+        function updateGridData(data) {
+            for (const key in data) {
+                gridData[key] = data[key];
+            }
+        }
+
+        function drawGrid() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const viewPort = getViewPort();
+
+            for (let y = viewPort.startY; y <= viewPort.endY; y++) {
+                for (let x = viewPort.startX; x <= viewPort.endX; x++) {
+                    const key = `${x},${y}`;
+                    const isChecked = gridData[key];
+                    const drawX = x * (boxSize + spacing) - offsetX;
+                    const drawY = y * (boxSize + spacing) - offsetY;
+
+                    // Draw checkbox
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 1;
+                    ctx.fillStyle = isChecked ? '#007bff' : 'white';
+                    ctx.fillRect(drawX, drawY, boxSize, boxSize);
+                    ctx.strokeRect(drawX, drawY, boxSize, boxSize);
+
+                    // Draw check mark if checked
+                    if (isChecked) {
+                        ctx.strokeStyle = 'white';
+                        ctx.lineWidth = 2;
+                        ctx.beginPath();
+                        ctx.moveTo(drawX + 3, drawY + boxSize / 2);
+                        ctx.lineTo(drawX + boxSize / 2, drawY + boxSize - 3);
+                        ctx.lineTo(drawX + boxSize - 3, drawY + 3);
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function checkIfNeedNewGridData() {
+            const viewPort = getViewPort();
+            if (viewPort.startX < loadedViewport.startX + preloadMargin ||
+                viewPort.startY < loadedViewport.startY + preloadMargin ||
+                viewPort.endX > loadedViewport.endX - preloadMargin ||
+                viewPort.endY > loadedViewport.endY - preloadMargin) {
+                requestGridData();
+            }
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            dragging = true;
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            dragging = false;
+            checkIfNeedNewGridData();
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (dragging) {
+                offsetX += lastX - e.clientX;
+                offsetY += lastY - e.clientY;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                drawGrid();
+            }
+        });
+
+        canvas.addEventListener('click', (e) => {
+            const clickX = Math.floor((e.clientX + offsetX) / (boxSize + spacing));
+            const clickY = Math.floor((e.clientY + offsetY) / (boxSize + spacing));
+            const key = `${clickX},${clickY}`;
+            gridData[key] = !gridData[key];
+            socket.send(JSON.stringify({ type: 'toggleBox', x: clickX, y: clickY }));
+            drawGrid();
+        });
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            requestGridData();
+        });
+
+        requestGridData();
+    </script>
+</body>
+</html>
