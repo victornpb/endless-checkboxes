@@ -68,7 +68,7 @@ function getChunkKey(x, y) {
 function loadChunk(chunkKey) {
     if (grid[chunkKey]) return grid[chunkKey];
 
-    const chunkPath = path.join(MAP_DIR, `${chunkKey}.bin`);
+    const chunkPath = path.join(MAP_DIR, `${chunkKey}.chunk`);
     let chunk;
     if (fs.existsSync(chunkPath)) {
         const buffer = fs.readFileSync(chunkPath);
@@ -77,14 +77,20 @@ function loadChunk(chunkKey) {
         chunk = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE);
     }
     grid[chunkKey] = chunk;
+
+    console.log(`Chunk loaded: ${chunkKey}. Total: ${Object.keys(grid).length}`);
     return chunk;
 }
 
 function saveChunksToDisk() {
     for (const chunkKey in grid) {
-        const chunkPath = path.join(MAP_DIR, `${chunkKey}.bin`);
-        fs.writeFileSync(chunkPath, Buffer.from(grid[chunkKey]));
+        saveChunk(chunkKey);
     }
+}
+
+function saveChunk(chunkKey){
+    const chunkPath = path.join(MAP_DIR, `${chunkKey}.chunk`);
+    fs.writeFileSync(chunkPath, Buffer.from(grid[chunkKey]));
 }
 
 function garbageCollectChunks() {
@@ -100,6 +106,7 @@ function garbageCollectChunks() {
     let unloadedCount = 0;
     for (const chunkKey in grid) {
         if (!activeChunks.has(chunkKey)) {
+            saveChunk(chunkKey); // save before unloading
             delete grid[chunkKey];
             unloadedCount++;
         }
