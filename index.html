@@ -66,8 +66,8 @@
         }
         .overlay {
             position: absolute;
-            top: 10px;
-            left: 10px;
+            top: 4px;
+            right: 20px;
             padding: 10px;
             background: rgba(0, 0, 0, 0.75);
             color: white;
@@ -88,9 +88,11 @@
         <div class="arrow down"></div>
     </div>
     <div class="overlay" id="overlay" style="display: block;">
-        <div>X: <span id="coordX">0</span> Y: <span id="coordY">0</span></div>
-        <div>Box X: <span id="mouseX">0</span> Box Y: <span id="mouseY">0</span></div>
+        <div>Origin: (<span id="coordX">0</span>, <span id="coordY">0</span>)</div>
+        <div>Checkbox: (<span id="mouseX">0</span>, <span id="mouseY">0</span>)</div>
         <div>Loaded Size: <span id="loadedSize">0</span></div>
+        <div>Loaded Checkboxes: <span id="totalLoaded">0</span></div>
+        <div>Visible Checkboxes: <span id="visibleBoxes">0</span></div>
     </div>
     <script>
         const canvas = document.getElementById('gridCanvas');
@@ -123,23 +125,27 @@
         let hRequestId, vRequestId;
         let isScrolling = false; // Declare isScrolling only once
 
+        const debugInfo = {
+            overlay: document.getElementById('overlay'),
+            coordX: document.getElementById('coordX'),
+            coordY: document.getElementById('coordY'),
+            mouseX: document.getElementById('mouseX'),
+            mouseY: document.getElementById('mouseY'),
+            loadedSize: document.getElementById('loadedSize'),
+            totalLoaded: document.getElementById('totalLoaded'),
+            visibleBoxes: document.getElementById('visibleBoxes')
+        };
+
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.host;
         const wsUrl = `${protocol}//${host}/ws`;
         const socket = new WebSocket(wsUrl);
 
-        const overlay = document.getElementById('overlay');
-        const coordX = document.getElementById('coordX');
-        const coordY = document.getElementById('coordY');
-        const mouseX = document.getElementById('mouseX');
-        const mouseY = document.getElementById('mouseY');
-        const loadedSize = document.getElementById('loadedSize');
-
         function toggleOverlay() {
-            if (overlay.style.display === 'none') {
-                overlay.style.display = '';
+            if (debugInfo.overlay.style.display === 'none') {
+                debugInfo.overlay.style.display = '';
             } else {
-                overlay.style.display = 'none';
+                debugInfo.overlay.style.display = 'none';
             }
         }
 
@@ -182,6 +188,8 @@
         function drawGrid() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const viewPort = getViewPort();
+            let visibleCount = 0;
+            let totalCount = Object.keys(gridData).length;
 
             for (let y = viewPort.startY; y <= viewPort.endY; y++) {
                 for (let x = viewPort.startX; x <= viewPort.endX; x++) {
@@ -189,6 +197,10 @@
                     const isChecked = gridData[key];
                     const drawX = x * (boxSize + spacing) - offsetX;
                     const drawY = y * (boxSize + spacing) - offsetY;
+
+                    if (key in gridData) {
+                        visibleCount++;
+                    }
 
                     // Draw checkbox
                     ctx.strokeStyle = 'black';
@@ -211,9 +223,11 @@
             }
 
             // Update overlay info
-            coordX.textContent = offsetX.toFixed(2);
-            coordY.textContent = offsetY.toFixed(2);
-            loadedSize.textContent = `${loadedViewport.endX - loadedViewport.startX} x ${loadedViewport.endY - loadedViewport.startY}`;
+            debugInfo.coordX.textContent = offsetX.toFixed(2);
+            debugInfo.coordY.textContent = offsetY.toFixed(2);
+            debugInfo.loadedSize.textContent = `${loadedViewport.endX - loadedViewport.startX} x ${loadedViewport.endY - loadedViewport.startY}`;
+            debugInfo.totalLoaded.textContent = totalCount;
+            debugInfo.visibleBoxes.textContent = visibleCount;
         }
 
         function updateOverlay(e) {
@@ -228,12 +242,11 @@
             const cursorX = Math.floor((coords.x + offsetX) / (boxSize + spacing));
             const cursorY = Math.floor((coords.y + offsetY) / (boxSize + spacing));
 
-
-            mouseX.textContent = cursorX;
-            mouseY.textContent = cursorY;
-            coordX.textContent = offsetX.toFixed(2);
-            coordY.textContent = offsetY.toFixed(2);
-            loadedSize.textContent = `${loadedViewport.endX - loadedViewport.startX} x ${loadedViewport.endY - loadedViewport.startY}`;
+            debugInfo.mouseX.textContent = cursorX;
+            debugInfo.mouseY.textContent = cursorY;
+            debugInfo.coordX.textContent = offsetX.toFixed(2);
+            debugInfo.coordY.textContent = offsetY.toFixed(2);
+            debugInfo.loadedSize.textContent = `${loadedViewport.endX - loadedViewport.startX} x ${loadedViewport.endY - loadedViewport.startY}`;
         }
 
         function checkIfNeedNewGridData() {
