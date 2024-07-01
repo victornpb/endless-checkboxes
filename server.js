@@ -32,13 +32,18 @@ const server = http.createServer((req, res) => {
 });
 
 // Create a WebSocket server
+let activeConnections = 0;
+let connectionIdInc = 0;
 const wss = new WebSocket.Server({ server });
 
 let grid = {}; // Store the grid state in chunks
 let clientViewports = new Map(); // Store the viewports of connected clients
 
-wss.on('connection', (socket) => {
-    console.log('New client connected');
+wss.on('connection', (socket, req) => {
+    connectionIdInc++;
+    activeConnections++;
+    const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    console.log('New client connected!', connectionIdInc, `'${ip}'`);
 
     socket.on('message', (message) => {
         const data = JSON.parse(message);
@@ -54,7 +59,8 @@ wss.on('connection', (socket) => {
     });
 
     socket.on('close', () => {
-        console.log('Client disconnected');
+        activeConnections--;
+        console.log('Client disconnected!', connectionIdInc, `'${ip}'`);
         clientViewports.delete(socket);
     });
 });
@@ -117,8 +123,8 @@ function garbageCollectChunks() {
 function toggleGridCell(x, y) {
     const chunkKey = getChunkKey(x, y);
     const chunk = loadChunk(chunkKey);
-    const localX = x % CHUNK_SIZE;
-    const localY = y % CHUNK_SIZE;
+    const localX = ((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const localY = ((y % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const index = localY * CHUNK_SIZE + localX;
     chunk[index] = chunk[index] ? 0 : 1;
 }
@@ -126,8 +132,8 @@ function toggleGridCell(x, y) {
 function getGridCell(x, y) {
     const chunkKey = getChunkKey(x, y);
     const chunk = loadChunk(chunkKey);
-    const localX = x % CHUNK_SIZE;
-    const localY = y % CHUNK_SIZE;
+    const localX = ((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    const localY = ((y % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const index = localY * CHUNK_SIZE + localX;
     return chunk[index];
 }
