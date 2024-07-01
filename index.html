@@ -104,6 +104,7 @@
         let hThumbPosition = 0;
         let vThumbPosition = 0;
         let hRequestId, vRequestId;
+        let isScrolling = false; // Declare isScrolling only once
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.host;
@@ -296,7 +297,6 @@
         let hCenter, vCenter;
         let hStartX, vStartY;
         let hDirection = 0, vDirection = 0;
-        let isScrolling = false;
 
         function updateScrollbarThumbs() {
             hCenter = hScrollbar.clientWidth / 2;
@@ -396,6 +396,13 @@
         updateScrollbarThumbs();
         window.addEventListener('resize', updateScrollbarThumbs);
 
+        // Trackpad/mouse scrolling
+        window.addEventListener('wheel', (e) => {
+            offsetX += e.deltaX / dpr;
+            offsetY += e.deltaY / dpr;
+            drawGrid();
+            checkIfNeedNewGridData();
+        });
     </script>
 </body>
 </html>
