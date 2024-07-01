@@ -7,11 +7,36 @@ const WebSocket = require('ws');
 const CHUNK_SIZE = 256;
 const SAVE_INTERVAL = 30000; // 30 seconds
 const MAP_DIR = path.join(__dirname, 'map');
+const STATS_FILE = path.join(__dirname, 'stats.json');
 
 // Create the map directory if it doesn't exist
 if (!fs.existsSync(MAP_DIR)) {
     fs.mkdirSync(MAP_DIR);
 }
+
+// Load statistics from file
+let stats = {
+    globalClickCount: 0,
+    totalChunks: 0
+};
+
+if (fs.existsSync(STATS_FILE)) {
+    const data = fs.readFileSync(STATS_FILE);
+    Object.assign(stats, JSON.parse(data));
+} else {
+    fs.writeFileSync(STATS_FILE, JSON.stringify(stats));
+}
+
+// Discover existing chunks
+function discoverChunks() {
+    const files = fs.readdirSync(MAP_DIR);
+    stats.totalChunks = files.filter(file => file.endsWith('.chunk')).length;
+}
+
+// Initialize chunk discovery
+discoverChunks();
+
+console.log(stats);
 
 // Create an HTTP server
 const server = http.createServer((req, res) => {
@@ -55,6 +80,7 @@ wss.on('connection', (socket, req) => {
             const key = `${data.x},${data.y}`;
             toggleGridCell(data.x, data.y);
             broadcastGridUpdate(key, getGridCell(data.x, data.y));
+            stats.globalClickCount++;
         }
     });
 
@@ -81,6 +107,7 @@ function loadChunk(chunkKey) {
         chunk = new Uint8Array(buffer);
     } else {
         chunk = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE);
+        stats.totalChunks++;
     }
     grid[chunkKey] = chunk;
 
@@ -94,7 +121,7 @@ function saveChunksToDisk() {
     }
 }
 
-function saveChunk(chunkKey){
+function saveChunk(chunkKey) {
     const chunkPath = path.join(MAP_DIR, `${chunkKey}.chunk`);
     fs.writeFileSync(chunkPath, Buffer.from(grid[chunkKey]));
 }
@@ -117,7 +144,7 @@ function garbageCollectChunks() {
             unloadedCount++;
         }
     }
-    if (unloadedCount>0) console.log(`Unloaded ${unloadedCount} chunks`);
+    if (unloadedCount > 0) console.log(`Unloaded ${unloadedCount} chunks`);
 }
 
 function toggleGridCell(x, y) {
@@ -168,6 +195,34 @@ function broadcastGridUpdate(key, value) {
     });
 }
 
+async function sendStats() {
+    const totalCheckboxes = stats.totalChunks * CHUNK_SIZE * CHUNK_SIZE;
+    const statsToSend = {
+        type: 'stats',
+        activeConnections,
+        totalChunks: stats.totalChunks,
+        totalCheckboxes,
+        globalClickCount: stats.globalClickCount
+    };
+
+    for (const client of wss.clients) {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(statsToSend));
+        }
+    }
+    setTimeout(sendStats, 5000);
+}
+
+// Persist statistics to file periodically
+function saveStats() {
+    fs.writeFileSync(STATS_FILE, JSON.stringify(stats));
+}
+
+setInterval(saveStats, SAVE_INTERVAL);
+
+// Send stats to clients periodically
+sendStats();
+
 // Save chunks to disk periodically
 setInterval(saveChunksToDisk, SAVE_INTERVAL);
 
@@ -179,3 +234,12 @@ const port = 8080;
 server.listen(port, () => {
     console.log(`Server is listening on http://localhost:${port}`);
 });
+
+function delay(ms) {
+    return new Promise(r => setTimeout(r, ms));
+}
+
+/** Random int from to (min and max included) */
+function rand(min, max) {
+    return Math.floor(Math.random() * (max - min + 1) + min);
+}

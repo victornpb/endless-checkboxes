@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multiplayer Grid</title>
+    <title>Checkbox Multiplayer</title>
     <style>
         html, body {
             overscroll-behavior-x: none;
@@ -11,6 +11,7 @@
         body {
             margin: 0;
             overflow: hidden;
+            font-family: monospace;
         }
         canvas {
             display: block;
@@ -69,13 +70,31 @@
             top: 4px;
             right: 20px;
             padding: 10px;
-            background: rgba(0, 0, 0, 0.75);
+            background: rgba(0, 0, 0, 0.6);
             color: white;
             font-family: monospace;
+        }
+
+        #title {
+            position: absolute;
+            top: 0px;
+            width: 100%;
+            pointer-events: none;
+            opacity: 0.85;
+            text-align: center;
+
+            color: blue;
         }
     </style>
 </head>
 <body>
+    
+    <div id="title">
+        <h1><span id="totalCheckboxes"></span> Checkboxes</h1>
+        <h3><span id="globalClicks"></span> clicks</h3>
+        <div>Players <span id="playersConnected"></span></div>
+    </div>
+
     <canvas id="gridCanvas"></canvas>
     <div class="scrollbar horizontal">
         <div class="arrow left"></div>
@@ -93,6 +112,9 @@
         <div>Loaded Size: <span id="loadedSize">0</span></div>
         <div>Loaded Checkboxes: <span id="totalLoaded">0</span></div>
         <div>Visible Checkboxes: <span id="visibleBoxes">0</span></div>
+        
+        <div>Total Chunks: <span id="totalChunks">0</span></div>
+        <!-- <div>Total Checkboxes: <span id="totalCheckboxes">0</span></div> -->
     </div>
     <script>
         const canvas = document.getElementById('gridCanvas');
@@ -133,7 +155,11 @@
             mouseY: document.getElementById('mouseY'),
             loadedSize: document.getElementById('loadedSize'),
             totalLoaded: document.getElementById('totalLoaded'),
-            visibleBoxes: document.getElementById('visibleBoxes')
+            visibleBoxes: document.getElementById('visibleBoxes'),
+            playersConnected: document.getElementById('playersConnected'),
+            totalChunks: document.getElementById('totalChunks'),
+            totalCheckboxes: document.getElementById('totalCheckboxes'),
+            globalClicks: document.getElementById('globalClicks')
         };
 
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -156,9 +182,20 @@
 
         socket.onmessage = (message) => {
             const data = JSON.parse(message.data);
-            updateGridData(data);
-            drawGrid();
+            if (data.type === 'stats') {
+                updateStats(data);
+            } else {
+                updateGridData(data);
+                drawGrid();
+            }
         };
+
+        function updateStats(stats) {
+            debugInfo.playersConnected.textContent = stats.activeConnections;
+            debugInfo.totalChunks.textContent = stats.totalChunks;
+            debugInfo.totalCheckboxes.textContent = stats.totalCheckboxes;
+            debugInfo.globalClicks.textContent = stats.globalClickCount;
+        }
 
         function requestGridData() {
             const viewPort = getViewPort();
@@ -203,7 +240,7 @@
                     }
 
                     // Draw checkbox
-                    ctx.strokeStyle = 'black';
+                    ctx.strokeStyle = '#888';
                     ctx.lineWidth = 1;
                     ctx.fillStyle = isChecked ? '#007bff' : 'white';
                     ctx.fillRect(drawX, drawY, boxSize, boxSize);
