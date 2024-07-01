@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Multiplayer Grid</title>
     <style>
+        html, body {
+            overscroll-behavior-x: none;
+        }
         body {
             margin: 0;
             overflow: hidden;
@@ -93,7 +96,7 @@
 
         const boxSize = 15;
         const spacing = 1;
-        const preloadMargin = 10; // Number of extra boxes to load around the viewport
+        const preloadMargin = 64; // Number of extra boxes to load around the viewport
         let offsetX = 0;
         let offsetY = 0;
         let dragging = false;
@@ -181,10 +184,10 @@
 
         function checkIfNeedNewGridData() {
             const viewPort = getViewPort();
-            if (viewPort.startX < loadedViewport.startX + preloadMargin ||
-                viewPort.startY < loadedViewport.startY + preloadMargin ||
-                viewPort.endX > loadedViewport.endX - preloadMargin ||
-                viewPort.endY > loadedViewport.endY - preloadMargin) {
+            if (viewPort.startX < loadedViewport.startX + (preloadMargin/2) ||
+                viewPort.startY < loadedViewport.startY + (preloadMargin/2) ||
+                viewPort.endX > loadedViewport.endX - (preloadMargin/2) ||
+                viewPort.endY > loadedViewport.endY - (preloadMargin/2)) {
                 requestGridData();
             }
         }
@@ -199,60 +202,24 @@
             };
         }
 
-        // Mouse events
-        canvas.addEventListener('mousedown', (e) => {
+        // Pointer events
+        canvas.addEventListener('pointerdown', (e) => {
             const coords = getScaledCoordinates(e);
             dragging = true;
             lastX = coords.x;
             lastY = coords.y;
+            canvas.setPointerCapture(e.pointerId);
         });
 
-        canvas.addEventListener('mouseup', (e) => {
+        canvas.addEventListener('pointerup', (e) => {
             dragging = false;
             checkIfNeedNewGridData();
+            canvas.releasePointerCapture(e.pointerId);
         });
 
-        canvas.addEventListener('mousemove', (e) => {
+        canvas.addEventListener('pointermove', (e) => {
             if (dragging) {
                 const coords = getScaledCoordinates(e);
-                offsetX += (lastX - coords.x) / dpr;
-                offsetY += (lastY - coords.y) / dpr;
-                lastX = coords.x;
-                lastY = coords.y;
-                drawGrid();
-            }
-        });
-
-        // Touch events
-        canvas.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 1) {
-                const coords = getScaledCoordinates(e.touches[0]);
-                dragging = true;
-                lastX = coords.x;
-                lastY = coords.y;
-                touchStartTime = Date.now();
-                touchStartX = lastX;
-                touchStartY = lastY;
-            }
-        });
-
-        canvas.addEventListener('touchend', (e) => {
-            if (Date.now() - touchStartTime < 300 && Math.abs(touchStartX - lastX) < 5 && Math.abs(touchStartY - lastY) < 5) {
-                const coords = { x: touchStartX, y: touchStartY };
-                const touchX = Math.floor((coords.x + offsetX) / (boxSize + spacing));
-                const touchY = Math.floor((coords.y + offsetY) / (boxSize + spacing));
-                const key = `${touchX},${touchY}`;
-                gridData[key] = !gridData[key];
-                socket.send(JSON.stringify({ type: 'toggleBox', x: touchX, y: touchY }));
-                drawGrid();
-            }
-            dragging = false;
-            checkIfNeedNewGridData();
-        });
-
-        canvas.addEventListener('touchmove', (e) => {
-            if (dragging && e.touches.length === 1) {
-                const coords = getScaledCoordinates(e.touches[0]);
                 offsetX += (lastX - coords.x) / dpr;
                 offsetY += (lastY - coords.y) / dpr;
                 lastX = coords.x;
@@ -349,47 +316,49 @@
             resetScrollbarThumbs();
         }
 
-        hThumb.addEventListener('mousedown', (e) => {
+        hThumb.addEventListener('pointerdown', (e) => {
             hDragging = true;
             hStartX = e.clientX;
             if (!isScrolling) {
                 isScrolling = true;
                 requestAnimationFrame(startScrolling);
             }
+            hThumb.setPointerCapture(e.pointerId);
         });
 
-        vThumb.addEventListener('mousedown', (e) => {
+        vThumb.addEventListener('pointerdown', (e) => {
             vDragging = true;
             vStartY = e.clientY;
             if (!isScrolling) {
                 isScrolling = true;
                 requestAnimationFrame(startScrolling);
             }
+            vThumb.setPointerCapture(e.pointerId);
         });
 
-        leftArrow.addEventListener('mousedown', () => startHorizontalScrolling(-1));
-        rightArrow.addEventListener('mousedown', () => startHorizontalScrolling(1));
-        upArrow.addEventListener('mousedown', () => startVerticalScrolling(-1));
-        downArrow.addEventListener('mousedown', () => startVerticalScrolling(1));
+        leftArrow.addEventListener('pointerdown', () => startHorizontalScrolling(-1));
+        rightArrow.addEventListener('pointerdown', () => startHorizontalScrolling(1));
+        upArrow.addEventListener('pointerdown', () => startVerticalScrolling(-1));
+        downArrow.addEventListener('pointerdown', () => startVerticalScrolling(1));
 
-        document.addEventListener('mouseup', () => {
+        document.addEventListener('pointerup', () => {
             hDragging = false;
             vDragging = false;
             stopScrolling();
         });
 
-        document.addEventListener('mousemove', (e) => {
+        document.addEventListener('pointermove', (e) => {
             if (hDragging) {
                 const deltaX = e.clientX - hStartX;
                 hThumb.style.left = `${parseInt(hThumb.style.left) + deltaX}px`;
                 hStartX = e.clientX;
-                hDirection = (parseInt(hThumb.style.left) + hThumb.clientWidth / 2 - hCenter) / hCenter * 5;
+                hDirection = (parseInt(hThumb.style.left) + hThumb.clientWidth / 2 - hCenter) / hCenter * 50;
             }
             if (vDragging) {
                 const deltaY = e.clientY - vStartY;
                 vThumb.style.top = `${parseInt(vThumb.style.top) + deltaY}px`;
                 vStartY = e.clientY;
-                vDirection = (parseInt(vThumb.style.top) + vThumb.clientHeight / 2 - vCenter) / vCenter * 5;
+                vDirection = (parseInt(vThumb.style.top) + vThumb.clientHeight / 2 - vCenter) / vCenter * 50;
             }
         });
 
