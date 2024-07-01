@@ -64,6 +64,15 @@
         .scrollbar.vertical .arrow.down {
             bottom: -16px;
         }
+        .overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            font-family: monospace;
+        }
     </style>
 </head>
 <body>
@@ -77,6 +86,11 @@
         <div class="arrow up"></div>
         <div class="thumb"></div>
         <div class="arrow down"></div>
+    </div>
+    <div class="overlay" id="overlay" style="display: block;">
+        <div>X: <span id="coordX">0</span> Y: <span id="coordY">0</span></div>
+        <div>Box X: <span id="mouseX">0</span> Box Y: <span id="mouseY">0</span></div>
+        <div>Loaded Size: <span id="loadedSize">0</span></div>
     </div>
     <script>
         const canvas = document.getElementById('gridCanvas');
@@ -113,6 +127,21 @@
         const host = window.location.host;
         const wsUrl = `${protocol}//${host}/ws`;
         const socket = new WebSocket(wsUrl);
+
+        const overlay = document.getElementById('overlay');
+        const coordX = document.getElementById('coordX');
+        const coordY = document.getElementById('coordY');
+        const mouseX = document.getElementById('mouseX');
+        const mouseY = document.getElementById('mouseY');
+        const loadedSize = document.getElementById('loadedSize');
+
+        function toggleOverlay() {
+            if (overlay.style.display === 'none') {
+                overlay.style.display = '';
+            } else {
+                overlay.style.display = 'none';
+            }
+        }
 
         socket.onopen = () => {
             console.log('WebSocket connection established');
@@ -180,14 +209,39 @@
                     }
                 }
             }
+
+            // Update overlay info
+            coordX.textContent = offsetX.toFixed(2);
+            coordY.textContent = offsetY.toFixed(2);
+            loadedSize.textContent = `${loadedViewport.endX - loadedViewport.startX} x ${loadedViewport.endY - loadedViewport.startY}`;
+        }
+
+        function updateOverlay(e) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const coords = {
+                x: (e.clientX - rect.left),
+                y: (e.clientY - rect.top)
+            };
+
+            const cursorX = Math.floor((coords.x + offsetX) / (boxSize + spacing));
+            const cursorY = Math.floor((coords.y + offsetY) / (boxSize + spacing));
+
+
+            mouseX.textContent = cursorX;
+            mouseY.textContent = cursorY;
+            coordX.textContent = offsetX.toFixed(2);
+            coordY.textContent = offsetY.toFixed(2);
+            loadedSize.textContent = `${loadedViewport.endX - loadedViewport.startX} x ${loadedViewport.endY - loadedViewport.startY}`;
         }
 
         function checkIfNeedNewGridData() {
             const viewPort = getViewPort();
-            if (viewPort.startX < loadedViewport.startX + (preloadMargin/2) ||
-                viewPort.startY < loadedViewport.startY + (preloadMargin/2) ||
-                viewPort.endX > loadedViewport.endX - (preloadMargin/2) ||
-                viewPort.endY > loadedViewport.endY - (preloadMargin/2)) {
+            if (viewPort.startX < loadedViewport.startX + (preloadMargin / 2) ||
+                viewPort.startY < loadedViewport.startY + (preloadMargin / 2) ||
+                viewPort.endX > loadedViewport.endX - (preloadMargin / 2) ||
+                viewPort.endY > loadedViewport.endY - (preloadMargin / 2)) {
                 requestGridData();
             }
         }
@@ -226,6 +280,7 @@
                 lastY = coords.y;
                 drawGrid();
             }
+            updateOverlay(e);
         });
 
         canvas.addEventListener('click', (e) => {
@@ -371,6 +426,13 @@
             offsetY += e.deltaY / dpr;
             drawGrid();
             checkIfNeedNewGridData();
+        });
+
+        // Toggle overlay on 'B', 'I', or 'F3' key press
+        window.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'b' || e.key.toLowerCase() === 'i' || e.key === 'F3') {
+                toggleOverlay();
+            }
         });
     </script>
 </body>
