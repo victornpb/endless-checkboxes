@@ -87,7 +87,7 @@ function saveChunksToDisk() {
     }
 }
 
-function unloadUnusedChunks() {
+function garbageCollectChunks() {
     const activeChunks = new Set();
     for (const viewport of clientViewports.values()) {
         for (let y = viewport.startY; y <= viewport.endY; y += CHUNK_SIZE) {
@@ -96,12 +96,15 @@ function unloadUnusedChunks() {
             }
         }
     }
-
+    console.log(`Loaded chunks: ${activeChunks.size}`);
+    let unloadedCount = 0;
     for (const chunkKey in grid) {
         if (!activeChunks.has(chunkKey)) {
             delete grid[chunkKey];
+            unloadedCount++;
         }
     }
+    if (unloadedCount>0) console.log(`Unloaded ${unloadedCount} chunks`);
 }
 
 function toggleGridCell(x, y) {
@@ -156,7 +159,7 @@ function broadcastGridUpdate(key, value) {
 setInterval(saveChunksToDisk, SAVE_INTERVAL);
 
 // Unload unused chunks periodically
-setInterval(unloadUnusedChunks, SAVE_INTERVAL);
+setInterval(garbageCollectChunks, SAVE_INTERVAL);
 
 // Start the server
 const port = 8080;
