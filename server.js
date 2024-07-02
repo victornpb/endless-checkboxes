@@ -246,13 +246,14 @@ function saveStats() {
     fs.writeFileSync(STATS_FILE, JSON.stringify(stats));
 }
 
-setInterval(saveStats, SAVE_INTERVAL);
-
 // Send stats to clients periodically
 sendStats();
 
+
 // Save chunks to disk periodically
 setInterval(saveChunksToDisk, SAVE_INTERVAL);
+// Save stats to disk periodically
+setInterval(saveStats, SAVE_INTERVAL);
 
 // Unload unused chunks periodically
 setInterval(garbageCollectChunks, SAVE_INTERVAL);

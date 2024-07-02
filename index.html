@@ -216,6 +216,8 @@
             debugInfo.totalChunks.textContent = stats.totalChunks;
             debugInfo.totalCheckboxes.textContent = stats.totalCheckboxes;
             debugInfo.globalClicks.textContent = stats.globalClickCount;
+
+            document.title = `${stats.totalCheckboxes} Checkboxes`;
         }
 
         function requestGridData() {
@@ -532,7 +534,7 @@
                 vStartY = e.clientY;
                 vDirection = (parseInt(vThumb.style.top) + vThumb.clientHeight / 2 - vCenter) / vCenter * 50;
             }
-        });
+        }, {passive: true});
 
         updateScrollbarThumbs();
         window.addEventListener('resize', updateScrollbarThumbs);
