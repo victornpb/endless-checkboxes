@@ -106,7 +106,7 @@ function loadChunk(chunkKey) {
         const buffer = fs.readFileSync(chunkPath);
         chunk = new Uint8Array(buffer);
     } else {
-        chunk = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE);
+        chunk = new Uint8Array(Math.ceil((CHUNK_SIZE * CHUNK_SIZE) / 8)); // Using 1 bit per checkbox
         stats.totalChunks++;
     }
     grid[chunkKey] = chunk;
@@ -153,7 +153,9 @@ function toggleGridCell(x, y) {
     const localX = ((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const localY = ((y % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const index = localY * CHUNK_SIZE + localX;
-    chunk[index] = chunk[index] ? 0 : 1;
+    const byteIndex = Math.floor(index / 8);
+    const bitIndex = index % 8;
+    chunk[byteIndex] ^= (1 << bitIndex); // Toggle the specific bit
 }
 
 function getGridCell(x, y) {
@@ -162,7 +164,9 @@ function getGridCell(x, y) {
     const localX = ((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const localY = ((y % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
     const index = localY * CHUNK_SIZE + localX;
-    return chunk[index];
+    const byteIndex = Math.floor(index / 8);
+    const bitIndex = index % 8;
+    return (chunk[byteIndex] & (1 << bitIndex)) !== 0 ? 1 : 0;
 }
 
 function sendGridData(viewPort) {
