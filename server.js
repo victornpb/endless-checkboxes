@@ -13,8 +13,15 @@ const INITIAL_COOLDOWN_PERIOD = 3000; // cooldown
 const COOLDOWN_INCREMENT_FACTOR = 2; // Cooldown period will double each time
 const COOLDOWN_RESET_TIME = 60000; // 1 minute to reset cooldown increment
 
-const MAP_DIR = path.join(__dirname, 'map');
-const STATS_FILE = path.join(__dirname, 'stats.json');
+const DATA_DIR = path.join(__dirname, 'data');
+const MAP_DIR = path.join(DATA_DIR, 'map');
+const STATS_FILE = path.join(DATA_DIR, 'stats.json');
+const CLIENTS_FILE = path.join(DATA_DIR, 'clients.json');
+
+// Create the data directory if it doesn't exist
+if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR);
+}
 
 // Create the map directory if it doesn't exist
 if (!fs.existsSync(MAP_DIR)) {
@@ -34,6 +41,16 @@ if (fs.existsSync(STATS_FILE)) {
     fs.writeFileSync(STATS_FILE, JSON.stringify(stats));
 }
 
+// Load clients from file
+let clients = {};
+
+if (fs.existsSync(CLIENTS_FILE)) {
+    const data = fs.readFileSync(CLIENTS_FILE);
+    clients = JSON.parse(data);
+} else {
+    fs.writeFileSync(CLIENTS_FILE, JSON.stringify(clients));
+}
+
 // Discover existing chunks
 function discoverChunks() {
     const files = fs.readdirSync(MAP_DIR);
@@ -44,8 +61,6 @@ function discoverChunks() {
 discoverChunks();
 
 console.log(stats);
-
-let clients = {};
 
 // Create an HTTP server
 const server = http.createServer((req, res) => {
@@ -303,6 +318,13 @@ function saveStats() {
     fs.writeFileSync(STATS_FILE, JSON.stringify(stats));
 }
 
+// Persist clients to file periodically
+function saveClients() {
+    const clientsString = Object.keys(clients).map(key => `"${key}":${JSON.stringify(clients[key])}`).join(',\n');
+    const formattedClients = `{\n${clientsString}\n}`;
+    fs.writeFileSync(CLIENTS_FILE, formattedClients);
+}
+
 // Send stats to clients periodically
 sendStats();
 
@@ -310,6 +332,8 @@ sendStats();
 setInterval(saveChunksToDisk, SAVE_INTERVAL);
 // Save stats to disk periodically
 setInterval(saveStats, SAVE_INTERVAL);
+// Save clients to disk periodically
+setInterval(saveClients, SAVE_INTERVAL);
 
 // Unload unused chunks periodically
 setInterval(garbageCollectChunks, SAVE_INTERVAL);
