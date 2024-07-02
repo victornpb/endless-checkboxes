@@ -96,6 +96,19 @@
             background: rgba(0, 0, 0, 0.8);
             color: white;
         }
+        .jump-to-coord {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        .jump-to-coord input {
+            width: 50px;
+            margin-right: 5px;
+        }
     </style>
 </head>
 <body>
@@ -126,6 +139,14 @@
         <h1><span id="totalCheckboxes"></span> Checkboxes</h1>
         <h3><span id="globalClicks"></span> clicks</h3>
         <div>Players <span id="playersConnected"></span></div>
+    </div>
+
+    <div class="jump-to-coord">
+        <label for="jumpX">X:</label>
+        <input type="number" id="jumpX" value="0">
+        <label for="jumpY">Y:</label>
+        <input type="number" id="jumpY" value="0">
+        <button onclick="jumpToCoord()">Jump</button>
     </div>
 
     <script>
@@ -165,6 +186,8 @@
         let hRequestId, vRequestId;
         let isScrolling = false; // Declare isScrolling only once
 
+        let inactivityTimer;
+
         const debugInfo = {
             overlay: document.getElementById('overlay'),
             coordX: document.getElementById('coordX'),
@@ -195,6 +218,7 @@
 
         socket.onopen = () => {
             console.log('WebSocket connection established');
+            restorePos();
             requestGridData();
         };
 
@@ -321,17 +345,42 @@
             }
 
             // Update overlay info
-            debugInfo.coordX.textContent = offsetX.toFixed(2);
-            debugInfo.coordY.textContent = offsetY.toFixed(2);
+            debugInfo.coordX.textContent = viewPort.startX;
+            debugInfo.coordY.textContent = viewPort.startY;
             debugInfo.loadedSize.textContent = `${loadedViewport.width} x ${loadedViewport.height}`;
             debugInfo.totalLoaded.textContent = totalCount;
             debugInfo.visibleBoxes.textContent = visibleCount;
         }
 
+        function updateUrlHash() {
+            clearTimeout(inactivityTimer);
+            inactivityTimer = setTimeout(() => {
+                updateHashWithCoordinates();
+            }, 1000 * 10);
+        }
+
+        function updateHashWithCoordinates() {
+            const viewPort = getViewPort();
+            const newHash = `${viewPort.startX},${viewPort.startY}`;
+            if (window.location.hash.substring(1) !== newHash) {
+                history.pushState(null, '', `#${newHash}`);
+            }
+        }
+
+        function jumpToCoord() {
+            const jumpX = parseInt(document.getElementById('jumpX').value, 10);
+            const jumpY = parseInt(document.getElementById('jumpY').value, 10);
+            offsetX = jumpX * (boxSize + spacing);
+            offsetY = jumpY * (boxSize + spacing);
+            drawGrid();
+            requestGridData();
+            updateUrlHash();
+        }
+
         function updateOverlay(e) {
+            const viewPort = getViewPort();
+
             const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
             const coords = {
                 x: (e.clientX - rect.left),
                 y: (e.clientY - rect.top)
@@ -342,8 +391,8 @@
 
             debugInfo.mouseX.textContent = cursorX;
             debugInfo.mouseY.textContent = cursorY;
-            debugInfo.coordX.textContent = offsetX.toFixed(2);
-            debugInfo.coordY.textContent = offsetY.toFixed(2);
+            debugInfo.coordX.textContent = viewPort.startX;
+            debugInfo.coordY.textContent = viewPort.startY;
             debugInfo.loadedSize.textContent = `${loadedViewport.width} x ${loadedViewport.height}`;
         }
 
@@ -384,6 +433,7 @@
                 lastX = coords.x;
                 lastY = coords.y;
                 drawGrid();
+                updateUrlHash();
             }
             updateOverlay(e);
         }, {passive: true});
@@ -466,6 +516,7 @@
             checkIfNeedNewGridData();
             if (isScrolling) {
                 requestAnimationFrame(startScrolling);
+                updateUrlHash();
             }
         }
 
@@ -553,6 +604,24 @@
                 toggleOverlay();
             }
         });
+
+        // Handle back navigation and manual URL changes
+        window.addEventListener('popstate', (e) => {
+            restorePos();
+            checkIfNeedNewGridData();
+            drawGrid();
+        });
+
+        function restorePos() {
+            const hash = window.location.hash.substring(1);
+            if (hash) {
+                const [x, y] = hash.split(',').map(Number);
+                if (!isNaN(x) && !isNaN(y)) {
+                    offsetX = x * (boxSize + spacing);
+                    offsetY = y * (boxSize + spacing);
+                }
+            }
+        }
     </script>
 </body>
 </html>
