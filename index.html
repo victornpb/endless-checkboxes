@@ -257,6 +257,7 @@
         }
 
         function drawGrid() {
+            const inset = 1; // The inset value for the checkboxes
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const viewPort = getViewPort();
             let visibleCount = 0;
@@ -277,17 +278,17 @@
                     ctx.strokeStyle = '#888';
                     ctx.lineWidth = 1;
                     ctx.fillStyle = isChecked ? '#007bff' : 'white';
-                    ctx.fillRect(drawX, drawY, boxSize, boxSize);
-                    ctx.strokeRect(drawX, drawY, boxSize, boxSize);
+                    ctx.fillRect(drawX + inset, drawY + inset, boxSize - 2 * inset, boxSize - 2 * inset);
+                    ctx.strokeRect(drawX + inset, drawY + inset, boxSize - 2 * inset, boxSize - 2 * inset);
 
                     // Draw check mark if checked
                     if (isChecked) {
                         ctx.strokeStyle = 'white';
                         ctx.lineWidth = 2;
                         ctx.beginPath();
-                        ctx.moveTo(drawX + 3, drawY + boxSize / 2);
-                        ctx.lineTo(drawX + boxSize / 2, drawY + boxSize - 3);
-                        ctx.lineTo(drawX + boxSize - 3, drawY + 3);
+                        ctx.moveTo(drawX + 3 + inset, drawY + boxSize / 2);
+                        ctx.lineTo(drawX + boxSize / 2 - 3 + inset, drawY + boxSize - 3 - inset);
+                        ctx.lineTo(drawX + boxSize - 3 - inset, drawY + 3 + inset);
                         ctx.stroke();
                     }
                 }
