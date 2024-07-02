@@ -154,7 +154,9 @@
         let offsetX = 0;
         let offsetY = 0;
         let dragging = false;
-        let lastX, lastY;
+        let dragThreshold = 8; // threshold for dragging vs clicking
+        let startX, startY, lastX, lastY;
+        let preventClick = false;
         let gridData = {};
         let loadedViewport = {};
         let touchStartTime, touchStartX, touchStartY;
@@ -345,13 +347,21 @@
         canvas.addEventListener('pointerdown', (e) => {
             const coords = getScaledCoordinates(e);
             dragging = true;
-            lastX = coords.x;
-            lastY = coords.y;
+            startX = lastX = coords.x;
+            startY = lastY = coords.y;
             canvas.setPointerCapture(e.pointerId);
         });
 
         canvas.addEventListener('pointerup', (e) => {
             dragging = false;
+            const coords = getScaledCoordinates(e);
+            const dx = coords.x - startX;
+            const dy = coords.y - startY;
+            if (Math.abs(dx) > dragThreshold || Math.abs(dy) > dragThreshold) {
+                preventClick = true;
+            } else {
+                preventClick = false;
+            }
             checkIfNeedNewGridData();
             canvas.releasePointerCapture(e.pointerId);
         });
@@ -369,6 +379,7 @@
         });
 
         canvas.addEventListener('click', (e) => {
+            if (preventClick) return;
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
