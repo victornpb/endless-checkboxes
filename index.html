@@ -16,6 +16,7 @@
         canvas {
             display: block;
             background: #ddd;
+            image-rendering: pixelated;
         }
         .scrollbar {
             position: absolute;
@@ -66,7 +67,6 @@
             bottom: -16px;
         }
 
-
         #title {
             position: absolute;
             top: 0px;
@@ -74,12 +74,10 @@
             pointer-events: none;
             opacity: 0.85;
             text-align: center;
-            
             color: #008;
-            /* background: rgba(0, 0, 0, 0.1); */
             font-size: 14pt;
         }
-        h1,h2,h3{
+        h1, h2, h3 {
             margin: 8px;
         }
 
@@ -122,7 +120,6 @@
         <div>Visible Checkboxes: <span id="visibleBoxes">0</span></div>
         
         <div>Total Chunks: <span id="totalChunks">0</span></div>
-        <!-- <div>Total Checkboxes: <span id="totalCheckboxes">0</span></div> -->
     </div>
 
     <div id="title">
@@ -131,25 +128,28 @@
         <div>Players <span id="playersConnected"></span></div>
     </div>
 
-
     <script>
         const canvas = document.getElementById('gridCanvas');
         const ctx = canvas.getContext('2d');
-        let dpr;
+        let dpr = 1;
+
+        let highDpiSupport = true;
 
         function resizeCanvas() {
-            dpr = window.devicePixelRatio || 1;
+            dpr =  highDpiSupport ? (window.devicePixelRatio || 1) : 1;
             canvas.width = window.innerWidth * dpr;
             canvas.height = window.innerHeight * dpr;
             canvas.style.width = `${window.innerWidth}px`;
             canvas.style.height = `${window.innerHeight}px`;
-            ctx.scale(dpr, dpr);
+            if (highDpiSupport) ctx.scale(dpr, dpr);
         }
 
         resizeCanvas();
 
-        const boxSize = 15;
-        const spacing = 1;
+        const boxSize = 16;
+        const spacing = 1; // dead space between checkboxes (non clickable)
+        const inset = 1; // The inset value for the checkboxes (clickable)
+
         const preloadMargin = 64; // Number of extra boxes to load around the viewport
         let offsetX = 0;
         let offsetY = 0;
@@ -157,7 +157,7 @@
         let dragThreshold = 8; // threshold for dragging vs clicking
         let startX, startY, lastX, lastY;
         let preventClick = false;
-        let gridData = {};
+        let gridData;
         let loadedViewport = {};
         let touchStartTime, touchStartX, touchStartY;
         let hThumbPosition = 0;
@@ -238,60 +238,82 @@
         }
 
         function updateGridData({ header, data }) {
-            const { startX, startY, width, height } = header;
-            const gridArray = Uint8Array.from(atob(data), c => c.charCodeAt(0));
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    const index = y * width + x;
-                    const byteIndex = Math.floor(index / 8);
-                    const bitIndex = index % 8;
-                    const isChecked = (gridArray[byteIndex] & (1 << bitIndex)) !== 0;
-                    const key = `${startX + x},${startY + y}`;
-                    gridData[key] = isChecked ? 1 : 0;
-                }
-            }
+            const { startX, startY, endX, endY, width, height, totalSize } = header;
+            const receivedGridData = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+            gridData = receivedGridData;
+            loadedViewport = { startX, startY, endX, endY, width, height, totalSize };
         }
 
         function updateGridCell(data) {
             for (const key in data) {
-                gridData[key] = data[key];
+                const [x, y] = key.split(',').map(Number);
+                setGridCell(x, y, data[key]);
+            }
+        }
+        
+        function setGridCell(x, y, value) {
+            const localX = x - loadedViewport.startX;
+            const localY = y - loadedViewport.startY;
+            const index = localY * loadedViewport.width + localX;
+            const byteIndex = Math.floor(index / 8);
+            const bitIndex = index % 8;
+            if (value) {
+                gridData[byteIndex] |= (1 << bitIndex);
+            } else {
+                gridData[byteIndex] &= ~(1 << bitIndex);
             }
         }
 
+        function getGridCell(x, y) {
+            const localX = x - loadedViewport.startX;
+            const localY = y - loadedViewport.startY;
+            const index = localY * loadedViewport.width + localX;
+            const byteIndex = Math.floor(index / 8);
+            const bitIndex = index % 8;
+            return (gridData[byteIndex] & (1 << bitIndex)) !== 0 ? 1 : 0;
+        }
+
         function drawGrid() {
-            const inset = 1; // The inset value for the checkboxes
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const viewPort = getViewPort();
             let visibleCount = 0;
-            let totalCount = Object.keys(gridData).length;
+            const totalCount = gridData.length * 8;
 
-            for (let y = viewPort.startY; y <= viewPort.endY; y++) {
-                for (let x = viewPort.startX; x <= viewPort.endX; x++) {
-                    const key = `${x},${y}`;
-                    const isChecked = gridData[key];
-                    const drawX = x * (boxSize + spacing) - offsetX;
-                    const drawY = y * (boxSize + spacing) - offsetY;
+            for (let y = 0; y < loadedViewport.height; y++) {
+                for (let x = 0; x < loadedViewport.width; x++) {
+                    const coordX = loadedViewport.startX + x;
+                    const coordY = loadedViewport.startY + y;
+                    if (coordX >= viewPort.startX && coordX <= viewPort.endX && coordY >= viewPort.startY && coordY <= viewPort.endY) {
+                        const isChecked = getGridCell(coordX, coordY);
+                        const drawX = (coordX * (boxSize + spacing) - offsetX) << 0;
+                        const drawY = (coordY * (boxSize + spacing) - offsetY) << 0;
 
-                    if (key in gridData) {
                         visibleCount++;
-                    }
 
-                    // Draw checkbox
-                    ctx.strokeStyle = '#888';
-                    ctx.lineWidth = 1;
-                    ctx.fillStyle = isChecked ? '#007bff' : 'white';
-                    ctx.fillRect(drawX + inset, drawY + inset, boxSize - 2 * inset, boxSize - 2 * inset);
-                    ctx.strokeRect(drawX + inset, drawY + inset, boxSize - 2 * inset, boxSize - 2 * inset);
+                        // Draw border rectangle
+                        ctx.fillStyle = '#888';
+                        ctx.fillRect(drawX+inset, drawY+inset, boxSize-(inset*2), boxSize-(inset*2));
 
-                    // Draw check mark if checked
-                    if (isChecked) {
-                        ctx.strokeStyle = 'white';
-                        ctx.lineWidth = 2;
-                        ctx.beginPath();
-                        ctx.moveTo(drawX + 3 + inset, drawY + boxSize / 2);
-                        ctx.lineTo(drawX + boxSize / 2 - 3 + inset, drawY + boxSize - 3 - inset);
-                        ctx.lineTo(drawX + boxSize - 3 - inset, drawY + 3 + inset);
-                        ctx.stroke();
+                        // Draw inner rectangle (the checkbox fill)
+                        const borderWidth = 1;
+                        ctx.fillStyle = isChecked ? '#007bff' : 'white';
+                        ctx.fillRect(drawX + inset + borderWidth, drawY + inset + borderWidth, boxSize - (borderWidth*2) - (inset * 2), boxSize - (borderWidth*2) - (inset * 2));
+
+                        // Draw check mark if checked
+                        if (isChecked) {
+                            ctx.strokeStyle = 'white';
+                            ctx.lineWidth = boxSize / 8; // Scale line width
+
+                            const innerSize = boxSize - (borderWidth * 2) - (inset * 2);
+                            const innerX = drawX + inset + borderWidth;
+                            const innerY = drawY + inset + borderWidth;
+                            
+                            ctx.beginPath();
+                            ctx.moveTo(innerX + (innerSize / 6), innerY + (innerSize / 2)); // Adjust start point
+                            ctx.lineTo(innerX + (innerSize / 2.5), innerY + innerSize - (innerSize / 5)); // Adjust midpoint
+                            ctx.lineTo(innerX + innerSize - (innerSize / 6), innerY + (innerSize / 6)); // Adjust end point
+                            ctx.stroke();
+                        }
                     }
                 }
             }
@@ -299,7 +321,7 @@
             // Update overlay info
             debugInfo.coordX.textContent = offsetX.toFixed(2);
             debugInfo.coordY.textContent = offsetY.toFixed(2);
-            debugInfo.loadedSize.textContent = `${loadedViewport.endX - loadedViewport.startX} x ${loadedViewport.endY - loadedViewport.startY}`;
+            debugInfo.loadedSize.textContent = `${loadedViewport.width} x ${loadedViewport.height}`;
             debugInfo.totalLoaded.textContent = totalCount;
             debugInfo.visibleBoxes.textContent = visibleCount;
         }
@@ -320,7 +342,7 @@
             debugInfo.mouseY.textContent = cursorY;
             debugInfo.coordX.textContent = offsetX.toFixed(2);
             debugInfo.coordY.textContent = offsetY.toFixed(2);
-            debugInfo.loadedSize.textContent = `${loadedViewport.endX - loadedViewport.startX} x ${loadedViewport.endY - loadedViewport.startY}`;
+            debugInfo.loadedSize.textContent = `${loadedViewport.width} x ${loadedViewport.height}`;
         }
 
         function checkIfNeedNewGridData() {
@@ -390,8 +412,7 @@
 
             const clickX = Math.floor((coords.x + offsetX) / (boxSize + spacing));
             const clickY = Math.floor((coords.y + offsetY) / (boxSize + spacing));
-            const key = `${clickX},${clickY}`;
-            gridData[key] = !gridData[key];
+            setGridCell(clickX, clickY, !getGridCell(clickX, clickY));
             socket.send(JSON.stringify({ type: 'toggleBox', x: clickX, y: clickY }));
             drawGrid();
         });
@@ -522,7 +543,7 @@
             offsetY += e.deltaY / dpr;
             drawGrid();
             checkIfNeedNewGridData();
-        });
+        }, {passive:true});
 
         // Toggle overlay on 'B', 'I', or 'F3' key press
         window.addEventListener('keydown', (e) => {
