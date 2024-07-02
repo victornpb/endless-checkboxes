@@ -96,18 +96,43 @@
             background: rgba(0, 0, 0, 0.8);
             color: white;
         }
-        .jump-to-coord {
+        .fab {
             position: absolute;
-            top: 10px;
-            left: 10px;
-            background: white;
-            padding: 5px;
-            border: 1px solid #ccc;
-            border-radius: 3px;
+            bottom: 30px;
+            right: 30px;
+            width: 32px;
+            height: 32px;
+            background-color: #888;
+            color: black;
+            display: flex;
+            border: 2px outset #666;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            /* font-size: 16px; */
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
         }
-        .jump-to-coord input {
-            width: 50px;
+        .fab-menu {
+            position: absolute;
+            bottom: 80px;
+            right: 20px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            display: none;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        .fab-menu input[type="checkbox"] {
             margin-right: 5px;
+        }
+        .fab-menu label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .fab-menu button {
+            margin-top: 10px;
+            width: 100%;
         }
         .message {
             position: absolute;
@@ -137,7 +162,7 @@
         <div class="arrow down"></div>
     </div>
 
-    <div class="overlay" id="overlay" style="display: block;">
+    <div class="overlay" id="overlay" style="display: none;">
         <div>Origin: (<span id="coordX">0</span>, <span id="coordY">0</span>)</div>
         <div>Checkbox: (<span id="mouseX">0</span>, <span id="mouseY">0</span>)</div>
         <div>Loaded Size: <span id="loadedSize">0</span></div>
@@ -153,12 +178,17 @@
         <div>Players <span id="playersConnected"></span></div>
     </div>
 
-    <div class="jump-to-coord">
-        <label for="jumpX">X:</label>
-        <input type="number" id="jumpX" value="0">
-        <label for="jumpY">Y:</label>
-        <input type="number" id="jumpY" value="0">
-        <button onclick="jumpToCoord()">Jump</button>
+    <div class="fab" onclick="toggleFabMenu()">...</div>
+    <div class="fab-menu" id="fabMenu">
+        <label>
+            <input type="checkbox" id="toggleOverlayCheckbox" onclick="toggleOverlay()"> Show debug overlay
+        </label>
+        <hr>
+        <div>
+            <label for="jumpX">X: <input type="number" id="jumpX" value="0" step="1" min="-9007199254740991" max="9007199254740991"></label>
+            <label for="jumpY">Y: <input type="number" id="jumpY" value="0" step="1" min="-9007199254740991" max="9007199254740991"></label>
+            <button onclick="jumpToCoord()">Jump to</button>
+        </div>
     </div>
 
     <div id="message" class="message"></div>
@@ -222,11 +252,21 @@
         const wsUrl = `${protocol}//${host}/ws`;
         const socket = new WebSocket(wsUrl);
 
-        function toggleOverlay() {
-            if (debugInfo.overlay.style.display === 'none') {
-                debugInfo.overlay.style.display = '';
+        function toggleFabMenu() {
+            const fabMenu = document.getElementById('fabMenu');
+            if (fabMenu.style.display === 'none' || fabMenu.style.display === '') {
+                fabMenu.style.display = 'block';
             } else {
-                debugInfo.overlay.style.display = 'none';
+                fabMenu.style.display = 'none';
+            }
+        }
+
+        function toggleOverlay() {
+            const overlay = document.getElementById('overlay');
+            if (overlay.style.display === 'none') {
+                overlay.style.display = '';
+            } else {
+                overlay.style.display = 'none';
             }
         }
 
