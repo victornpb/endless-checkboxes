@@ -162,7 +162,7 @@
         <div class="arrow down"></div>
     </div>
 
-    <div class="overlay" id="overlay" style="display: none;">
+    <div class="overlay" id="overlay" style="display: block;">
         <div>Origin: (<span id="coordX">0</span>, <span id="coordY">0</span>)</div>
         <div>Checkbox: (<span id="mouseX">0</span>, <span id="mouseY">0</span>)</div>
         <div>Loaded Size: <span id="loadedSize">0</span></div>
@@ -181,7 +181,7 @@
     <div class="fab" onclick="toggleFabMenu()">...</div>
     <div class="fab-menu" id="fabMenu">
         <label>
-            <input type="checkbox" id="toggleOverlayCheckbox" onclick="toggleOverlay()"> Show debug overlay
+            <input type="checkbox" id="toggleOverlayCheckbox" onclick="toggleOverlay(this.checked)" checked> Show info overlay
         </label>
         <hr>
         <div>
@@ -261,12 +261,12 @@
             }
         }
 
-        function toggleOverlay() {
+        function toggleOverlay(bool) {
             const overlay = document.getElementById('overlay');
-            if (overlay.style.display === 'none') {
-                overlay.style.display = '';
+            if (bool !== undefined) {
+                overlay.style.display = bool ? '' : 'none';
             } else {
-                overlay.style.display = 'none';
+                overlay.style.display = (overlay.style.display === 'none') ? '' : 'none';
             }
         }
 
