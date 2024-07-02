@@ -109,6 +109,18 @@
             width: 50px;
             margin-right: 5px;
         }
+        .message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            font-family: monospace;
+            font-size: 16pt;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -149,6 +161,8 @@
         <button onclick="jumpToCoord()">Jump</button>
     </div>
 
+    <div id="message" class="message"></div>
+
     <script>
         const canvas = document.getElementById('gridCanvas');
         const ctx = canvas.getContext('2d');
@@ -157,7 +171,7 @@
         let highDpiSupport = true;
 
         function resizeCanvas() {
-            dpr =  highDpiSupport ? (window.devicePixelRatio || 1) : 1;
+            dpr = highDpiSupport ? (window.devicePixelRatio || 1) : 1;
             canvas.width = window.innerWidth * dpr;
             canvas.height = window.innerHeight * dpr;
             canvas.style.width = `${window.innerWidth}px`;
@@ -229,6 +243,8 @@
             } else if (data.type === 'gridData') {
                 updateGridData(data);
                 drawGrid();
+            } else if (data.type === 'error') {
+                showMessage(data.message, data.retry);
             } else {
                 updateGridCell(data);
                 drawGrid();
@@ -318,12 +334,12 @@
 
                         // Draw border rectangle
                         ctx.fillStyle = '#888';
-                        ctx.fillRect(drawX+inset, drawY+inset, boxSize-(inset*2), boxSize-(inset*2));
+                        ctx.fillRect(drawX + inset, drawY + inset, boxSize - (inset * 2), boxSize - (inset * 2));
 
                         // Draw inner rectangle (the checkbox fill)
                         const borderWidth = 1;
                         ctx.fillStyle = isChecked ? '#007bff' : 'white';
-                        ctx.fillRect(drawX + inset + borderWidth, drawY + inset + borderWidth, boxSize - (borderWidth*2) - (inset * 2), boxSize - (borderWidth*2) - (inset * 2));
+                        ctx.fillRect(drawX + inset + borderWidth, drawY + inset + borderWidth, boxSize - (borderWidth * 2) - (inset * 2), boxSize - (borderWidth * 2) - (inset * 2));
 
                         // Draw check mark if checked
                         if (isChecked) {
@@ -350,6 +366,15 @@
             debugInfo.loadedSize.textContent = `${loadedViewport.width} x ${loadedViewport.height}`;
             debugInfo.totalLoaded.textContent = totalCount;
             debugInfo.visibleBoxes.textContent = visibleCount;
+        }
+
+        function showMessage(message, timeout) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, timeout || 5000);
         }
 
         function updateUrlHash() {

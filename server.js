@@ -6,6 +6,13 @@ const WebSocket = require('ws');
 // Constants
 const CHUNK_SIZE = 256;
 const SAVE_INTERVAL = 30000; // 30 seconds
+
+const RATE_LIMIT_TIME_WINDOW = 2000;
+const MAX_REQUESTS_PER_WINDOW = 10;
+const INITIAL_COOLDOWN_PERIOD = 3000; // cooldown
+const COOLDOWN_INCREMENT_FACTOR = 2; // Cooldown period will double each time
+const COOLDOWN_RESET_TIME = 60000; // 1 minute to reset cooldown increment
+
 const MAP_DIR = path.join(__dirname, 'map');
 const STATS_FILE = path.join(__dirname, 'stats.json');
 
@@ -38,6 +45,8 @@ discoverChunks();
 
 console.log(stats);
 
+let clients = {};
+
 // Create an HTTP server
 const server = http.createServer((req, res) => {
     if (req.method === 'GET' && req.url === '/') {
@@ -65,12 +74,59 @@ let grid = {}; // Store the grid state in chunks
 let clientViewports = new Map(); // Store the viewports of connected clients
 
 wss.on('connection', (socket, req) => {
+    const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+
     connectionIdInc++;
     activeConnections++;
-    const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+
+    const currentTime = Date.now();
+    if (!clients[ip]) {
+        clients[ip] = {
+            created: currentTime,
+            lastActivity: currentTime,
+            sessions: 0,
+            messages: 0,
+            clicks: 0,
+            cooldownUntil: 0,
+            cooldownCount: 0,
+            lastCooldown: 0,
+            requests: []
+        };
+    }
+    const client = clients[ip];
+    client.sessions++;
+
     console.log('New client connected!', connectionIdInc, `'${ip}'`);
 
     socket.on('message', (message) => {
+        const now = Date.now();
+        client.lastActivity = now;
+        client.requests.push(now);
+        client.messages++;
+
+        // Reset cooldown period if no cooldown has been hit in a while
+        if (client.lastCooldown && now - client.lastCooldown > COOLDOWN_RESET_TIME) {
+            client.cooldownCount = 0;
+        }
+
+        if (client.cooldownUntil && now < client.cooldownUntil) {
+            socket.send(JSON.stringify({ type: 'error', message: `You are in cooldown period. Please wait ${Math.round((client.cooldownUntil - now) / 1000)} seconds.`, retry: client.cooldownUntil - now }));
+            return;
+        }
+
+        // Remove timestamps older than the time window
+        while (client.requests.length > 0 && client.requests[0] <= now - RATE_LIMIT_TIME_WINDOW) {
+            client.requests.shift();
+        }
+
+        if (client.requests.length > MAX_REQUESTS_PER_WINDOW) {
+            client.cooldownCount++;
+            client.lastCooldown = now;
+            client.cooldownUntil = now + INITIAL_COOLDOWN_PERIOD * Math.pow(COOLDOWN_INCREMENT_FACTOR, client.cooldownCount - 1);
+            socket.send(JSON.stringify({ type: 'error', message: `Slow down! You exceeded the rate limit. Wait ${Math.round((client.cooldownUntil - now) / 1000)} seconds.`, retry: client.cooldownUntil - now }));
+            return;
+        }
+
         const data = JSON.parse(message);
         if (data.type === 'requestGrid') {
             clientViewports.set(socket, data.viewPort);
@@ -80,6 +136,7 @@ wss.on('connection', (socket, req) => {
             const key = `${data.x},${data.y}`;
             toggleGridCell(data.x, data.y);
             broadcastGridUpdate(key, getGridCell(data.x, data.y));
+            client.clicks++;
             stats.globalClickCount++;
         }
     });
@@ -111,7 +168,7 @@ function loadChunk(chunkKey) {
     }
     grid[chunkKey] = chunk;
 
-    console.log(`Chunk loaded: ${chunkKey}. Total: ${Object.keys(grid).length}`);
+    console.log(`Loaded Chunk (${chunkKey}). Total: ${Object.keys(grid).length}`);
     return chunk;
 }
 
@@ -135,16 +192,16 @@ function garbageCollectChunks() {
             }
         }
     }
-    console.log(`Loaded chunks: ${activeChunks.size}`);
+    
     let unloadedCount = 0;
     for (const chunkKey in grid) {
         if (!activeChunks.has(chunkKey)) {
             saveChunk(chunkKey); // save before unloading
             delete grid[chunkKey];
             unloadedCount++;
+            console.log(`Unloaded Chunk (${chunkKey}). Total: ${Object.keys(grid).length}`);
         }
     }
-    if (unloadedCount > 0) console.log(`Unloaded ${unloadedCount} chunks`);
 }
 
 function toggleGridCell(x, y) {
@@ -248,7 +305,6 @@ function saveStats() {
 
 // Send stats to clients periodically
 sendStats();
-
 
 // Save chunks to disk periodically
 setInterval(saveChunksToDisk, SAVE_INTERVAL);
