@@ -65,15 +65,7 @@
         .scrollbar.vertical .arrow.down {
             bottom: -16px;
         }
-        .overlay {
-            position: absolute;
-            top: 4px;
-            right: 20px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.6);
-            color: white;
-            font-family: monospace;
-        }
+
 
         #title {
             position: absolute;
@@ -82,20 +74,35 @@
             pointer-events: none;
             opacity: 0.85;
             text-align: center;
+            
+            color: #008;
+            /* background: rgba(0, 0, 0, 0.1); */
+            font-size: 14pt;
+        }
+        h1,h2,h3{
+            margin: 8px;
+        }
 
-            color: blue;
+        .overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 4px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.1);
+            color: black;
+            font-family: monospace;
+            font-size: 8pt;
+            pointer-events: none;
+        }
+        .overlay:hover {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
         }
     </style>
 </head>
 <body>
-    
-    <div id="title">
-        <h1><span id="totalCheckboxes"></span> Checkboxes</h1>
-        <h3><span id="globalClicks"></span> clicks</h3>
-        <div>Players <span id="playersConnected"></span></div>
-    </div>
-
     <canvas id="gridCanvas"></canvas>
+    
     <div class="scrollbar horizontal">
         <div class="arrow left"></div>
         <div class="thumb"></div>
@@ -106,6 +113,7 @@
         <div class="thumb"></div>
         <div class="arrow down"></div>
     </div>
+
     <div class="overlay" id="overlay" style="display: block;">
         <div>Origin: (<span id="coordX">0</span>, <span id="coordY">0</span>)</div>
         <div>Checkbox: (<span id="mouseX">0</span>, <span id="mouseY">0</span>)</div>
@@ -116,6 +124,14 @@
         <div>Total Chunks: <span id="totalChunks">0</span></div>
         <!-- <div>Total Checkboxes: <span id="totalCheckboxes">0</span></div> -->
     </div>
+
+    <div id="title">
+        <h1><span id="totalCheckboxes"></span> Checkboxes</h1>
+        <h3><span id="globalClicks"></span> clicks</h3>
+        <div>Players <span id="playersConnected"></span></div>
+    </div>
+
+
     <script>
         const canvas = document.getElementById('gridCanvas');
         const ctx = canvas.getContext('2d');
