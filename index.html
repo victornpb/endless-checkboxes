@@ -203,6 +203,9 @@
             } else if (data.type === 'gridData') {
                 updateGridData(data);
                 drawGrid();
+            } else {
+                updateGridCell(data);
+                drawGrid();
             }
         };
 
@@ -244,6 +247,12 @@
                     const key = `${startX + x},${startY + y}`;
                     gridData[key] = isChecked ? 1 : 0;
                 }
+            }
+        }
+
+        function updateGridCell(data) {
+            for (const key in data) {
+                gridData[key] = data[key];
             }
         }
 
