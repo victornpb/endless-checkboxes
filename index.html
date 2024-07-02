@@ -352,6 +352,18 @@
             canvas.setPointerCapture(e.pointerId);
         });
 
+        canvas.addEventListener('pointermove', (e) => {
+            if (dragging) {
+                const coords = getScaledCoordinates(e);
+                offsetX += (lastX - coords.x) / dpr;
+                offsetY += (lastY - coords.y) / dpr;
+                lastX = coords.x;
+                lastY = coords.y;
+                drawGrid();
+            }
+            updateOverlay(e);
+        }, {passive: true});
+
         canvas.addEventListener('pointerup', (e) => {
             dragging = false;
             const coords = getScaledCoordinates(e);
@@ -364,18 +376,6 @@
             }
             checkIfNeedNewGridData();
             canvas.releasePointerCapture(e.pointerId);
-        });
-
-        canvas.addEventListener('pointermove', (e) => {
-            if (dragging) {
-                const coords = getScaledCoordinates(e);
-                offsetX += (lastX - coords.x) / dpr;
-                offsetY += (lastY - coords.y) / dpr;
-                lastX = coords.x;
-                lastY = coords.y;
-                drawGrid();
-            }
-            updateOverlay(e);
         });
 
         canvas.addEventListener('click', (e) => {
