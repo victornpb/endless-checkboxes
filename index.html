@@ -234,11 +234,15 @@
 
         function updateGridData({ header, data }) {
             const { startX, startY, width, height } = header;
-            let index = 0;
-            for (let y = startY; y < startY + height; y++) {
-                for (let x = startX; x < startX + width; x++) {
-                    const key = `${x},${y}`;
-                    gridData[key] = data[index++];
+            const gridArray = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const index = y * width + x;
+                    const byteIndex = Math.floor(index / 8);
+                    const bitIndex = index % 8;
+                    const isChecked = (gridArray[byteIndex] & (1 << bitIndex)) !== 0;
+                    const key = `${startX + x},${startY + y}`;
+                    gridData[key] = isChecked ? 1 : 0;
                 }
             }
         }

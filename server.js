@@ -171,11 +171,21 @@ function getGridCell(x, y) {
 
 function sendGridData(viewPort) {
     const { startX, startY, endX, endY } = viewPort;
-    
-    const gridArray = [];
+    const width = endX - startX + 1;
+    const height = endY - startY + 1;
+    const gridArray = new Uint8Array(Math.ceil((width * height) / 8));
+
     for (let y = startY; y <= endY; y++) {
         for (let x = startX; x <= endX; x++) {
-            gridArray.push(getGridCell(x, y));
+            const cellValue = getGridCell(x, y);
+            const localX = x - startX;
+            const localY = y - startY;
+            const index = localY * width + localX;
+            const byteIndex = Math.floor(index / 8);
+            const bitIndex = index % 8;
+            if (cellValue) {
+                gridArray[byteIndex] |= (1 << bitIndex);
+            }
         }
     }
 
@@ -186,11 +196,11 @@ function sendGridData(viewPort) {
             startY,
             endX,
             endY,
-            width: endX - startX + 1,
-            height: endY - startY + 1,
+            width,
+            height,
             totalSize: gridArray.length
         },
-        data: gridArray
+        data: Buffer.from(gridArray).toString('base64')
     };
     return message;
 }
