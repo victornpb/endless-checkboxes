@@ -267,6 +267,9 @@
             globalClicks: document.getElementById('globalClicks')
         };
 
+        let currentTotalCheckboxes = 0;
+        let currentGlobalClicks = 0;
+
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const host = window.location.host;
         const wsUrl = `${protocol}//${host}/ws`;
@@ -324,10 +327,14 @@
         };
 
         function updateStats(stats) {
+            animateNumberChange('totalCheckboxes', currentTotalCheckboxes, stats.totalCheckboxes, 1000);
+            animateNumberChange('globalClicks', currentGlobalClicks, stats.globalClickCount, 1000);
+
+            currentTotalCheckboxes = stats.totalCheckboxes;
+            currentGlobalClicks = stats.globalClickCount;
+
             debugInfo.playersConnected.textContent = stats.activeConnections;
             debugInfo.totalChunks.textContent = stats.totalChunks;
-            debugInfo.totalCheckboxes.textContent = stats.totalCheckboxes;
-            debugInfo.globalClicks.textContent = stats.globalClickCount;
 
             document.title = `${stats.totalCheckboxes} Checkboxes`;
         }
@@ -746,6 +753,32 @@
                 func(...args);
             };
         }
+
+        // Animate number change
+        function animateNumberChange(id, start, end, duration) {
+            const element = document.getElementById(id);
+            const range = end - start;
+            const minTimer = 50;
+            const stepTime = Math.abs(Math.floor(duration / range));
+
+            const step = (end > start) ? 1 : -1;
+            const startTime = new Date().getTime();
+            const endTime = startTime + duration;
+            let timer;
+
+            function run() {
+                const now = new Date().getTime();
+                const remaining = Math.max((endTime - now) / duration, 0);
+                const value = Math.round(end - (remaining * range));
+                element.innerHTML = value;
+                if (value == end) {
+                    clearInterval(timer);
+                }
+            }
+
+            timer = setInterval(run, Math.max(stepTime, minTimer));
+            run();
+        }
         
         // Particle effect logic for checked and unchecked particles
         const particles1 = []; // Checked particles (ripple)
@@ -825,7 +858,6 @@
                 fxRunning = false;
             }
         }
-
     </script>
 </body>
 </html>
