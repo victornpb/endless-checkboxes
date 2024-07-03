@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Checkbox Multiplayer</title>
+    <title>Endless Checkboxes Multiplayer</title>
     <style>
         html, body {
             overscroll-behavior-x: none;
@@ -17,6 +17,9 @@
         canvas {
             display: block;
             image-rendering: pixelated;
+        }
+        #gridCanvas {
+            background: #ddd;
         }
         #particleCanvas {
             position: absolute;
@@ -140,6 +143,14 @@
             margin-top: 10px;
             width: 100%;
         }
+        .message-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.25);
+        }
         .message {
             position: absolute;
             top: 50%;
@@ -150,7 +161,9 @@
             color: white;
             font-family: monospace;
             font-size: 16pt;
-            display: none;
+            text-align: center;
+            white-space: pre;
+            text-wrap: wrap;
         }
     </style>
 </head>
@@ -201,12 +214,14 @@
         </div>
     </div>
 
-    <div id="message" class="message"></div>
+    <div class="message-backdrop" style="display: none;">
+        <div id="message" class="message"></div>
+    </div>
 
     <script>
         const canvas = document.getElementById('gridCanvas');
         const particleCanvas = document.getElementById('particleCanvas');
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: false });
         const particleCtx = particleCanvas.getContext('2d');
         let dpr = 1;
         let particlesEnabled = true;
@@ -323,7 +338,7 @@
 
         socket.onclose = (e)=>{
             console.log('Conection closed!', e);
-            showMessage('Connection lost! Please refresh', 1000 * 60 * 60);
+            showMessage('Connection lost!\nPlease refresh', 1000 * 60 * 60);
         };
 
         function updateStats(stats) {
@@ -347,7 +362,7 @@
                 endX: viewPort.endX + preloadMargin,
                 endY: viewPort.endY + preloadMargin,
             };
-            socket.send(JSON.stringify({ type: 'requestGrid', viewPort: loadedViewport }));
+            socket.send(JSON.stringify({ type: 'getGrid', viewPort: loadedViewport }));
         }
 
         function getViewPort() {
@@ -395,7 +410,11 @@
         }
 
         function drawGrid() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "#ddd";
+            ctx.fillRect(0, 0, canvas.width, canvas.height); // don't use opacity, supposedely faster even tho i didnt measure it but makes sense
+            // ctx.clearRect(0, 0, canvas.width, canvas.height);
+
             const viewPort = getViewPort();
             let visibleCount = 0;
             const totalCount = gridData.length * 8;
@@ -410,15 +429,20 @@
                         const drawY = (coordY * (boxSize + spacing) - offsetY) << 0;
 
                         visibleCount++;
-
-                        // Draw border rectangle
-                        ctx.fillStyle = '#888';
-                        ctx.fillRect(drawX + inset, drawY + inset, boxSize - (inset * 2), boxSize - (inset * 2));
+                        
+                        const r1 = ()=>{
+                            // Draw border rectangle
+                            ctx.fillStyle = '#888';
+                            ctx.fillRect(drawX + inset, drawY + inset, boxSize - (inset * 2), boxSize - (inset * 2));
+                        }; r1();
 
                         // Draw inner rectangle (the checkbox fill)
                         const borderWidth = 1;
-                        ctx.fillStyle = isChecked ? '#007bff' : 'white';
-                        ctx.fillRect(drawX + inset + borderWidth, drawY + inset + borderWidth, boxSize - (borderWidth * 2) - (inset * 2), boxSize - (borderWidth * 2) - (inset * 2));
+                        
+                        const r2 = ()=>{
+                            ctx.fillStyle = isChecked ? '#007bff' : 'white';
+                            ctx.fillRect(drawX + inset + borderWidth, drawY + inset + borderWidth, boxSize - (borderWidth * 2) - (inset * 2), boxSize - (borderWidth * 2) - (inset * 2));
+                        }; r2();
 
                         // Draw check mark if checked
                         if (isChecked) {
@@ -448,10 +472,11 @@
         }
 
         function showMessage(message, timeout=5000) {
-            const messageDiv = document.getElementById('message');
+            const messageBackdrop = document.querySelector('.message-backdrop');
+            const messageDiv = document.querySelector('#message');
             messageDiv.textContent = message;
-            messageDiv.style.display = 'block';
-            if (timeout !== -1) setTimeout(() => { messageDiv.style.display = 'none'; }, timeout);
+            messageBackdrop.style.display = 'block';
+            if (timeout !== -1) setTimeout(() => { messageBackdrop.style.display = 'none'; }, timeout);
         }
 
         function updateUrlHash() {
@@ -568,7 +593,7 @@
             const clickX = Math.floor((coords.x + offsetX) / (boxSize + spacing));
             const clickY = Math.floor((coords.y + offsetY) / (boxSize + spacing));
             setGridCell(clickX, clickY, !getGridCell(clickX, clickY));
-            socket.send(JSON.stringify({ type: 'toggleBox', x: clickX, y: clickY }));
+            socket.send(JSON.stringify({ type: 'toggle', x: clickX, y: clickY }));
             drawGrid();
         });
 

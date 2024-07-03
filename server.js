@@ -133,7 +133,7 @@ wss.on('connection', (socket, req) => {
         }
 
         if (client.cooldownUntil && now < client.cooldownUntil) {
-            socket.send(JSON.stringify({ type: 'error', message: `You are in cooldown period. Please wait ${Math.round((client.cooldownUntil - now) / 1000)} seconds.`, retry: client.cooldownUntil - now }));
+            socket.send(JSON.stringify({ type: 'error', message: `You are in cooldown period.\nPlease wait ${Math.round((client.cooldownUntil - now) / 1000)} seconds.`, retry: client.cooldownUntil - now }));
             return;
         }
 
@@ -146,16 +146,16 @@ wss.on('connection', (socket, req) => {
             client.cooldownCount++;
             client.lastCooldown = now;
             client.cooldownUntil = now + INITIAL_COOLDOWN_PERIOD * Math.pow(COOLDOWN_INCREMENT_FACTOR, client.cooldownCount - 1);
-            socket.send(JSON.stringify({ type: 'error', message: `Slow down! You exceeded the rate limit. Wait ${Math.round((client.cooldownUntil - now) / 1000)} seconds.`, retry: client.cooldownUntil - now }));
+            socket.send(JSON.stringify({ type: 'error', message: `Slow down! You exceeded the rate limit.\nWait ${Math.round((client.cooldownUntil - now) / 1000)} seconds.`, retry: client.cooldownUntil - now }));
             return;
         }
 
         const data = JSON.parse(message);
-        if (data.type === 'requestGrid') {
+        if (data.type === 'getGrid') {
             clientViewports.set(socket, data.viewPort);
-            const res = sendGridData(data.viewPort);
+            const res = getGridData(data.viewPort);
             socket.send(JSON.stringify(res));
-        } else if (data.type === 'toggleBox') {
+        } else if (data.type === 'toggle') {
             const key = `${data.x},${data.y}`;
             toggleGridCell(data.x, data.y);
             broadcastGridUpdate(key, getGridCell(data.x, data.y));
@@ -249,7 +249,7 @@ function getGridCell(x, y) {
     return (chunk[byteIndex] & (1 << bitIndex)) !== 0 ? 1 : 0;
 }
 
-function sendGridData(viewPort) {
+function getGridData(viewPort) {
     const { startX, startY, endX, endY } = viewPort;
     const width = endX - startX + 1;
     const height = endY - startY + 1;
@@ -304,6 +304,7 @@ function sendGridData(viewPort) {
         },
         data: Buffer.from(gridArray).toString('base64')
     };
+
     return message;
 }
 
