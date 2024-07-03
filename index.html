@@ -743,51 +743,83 @@
                 func(...args);
             };
         }
-
-        // Particle effect logic
-        const particles = [];
+        
+        // Particle effect logic for checked and unchecked particles
+        const particles1 = []; // Checked particles (ripple)
+        const particles2 = []; // Unchecked particles (squares)
 
         function createParticleEffect(data) {
             for (const key in data) {
+                const v = data[key];
                 const [x, y] = key.split(',').map(Number);
-                if (data[key]) {
-                    spawnParticles(x, y);
-                    updateParticles();
+
+                if (v) {
+                    spawnParticles1(x, y);
+                } else {
+                    spawnParticles2(x, y);
                 }
             }
+            if (!fxRunning) updateParticles();
         }
 
-        function spawnParticles(x, y) {
+        function spawnParticles1(x, y) {
+            particles1.push({
+                x: x * (boxSize + spacing) - offsetX + boxSize / 2,
+                y: y * (boxSize + spacing) - offsetY + boxSize / 2,
+                size: boxSize * 3.5,
+                alpha: 0.5
+            });
+        }
+
+        function spawnParticles2(x, y) {
             const numParticles = 10;
             for (let i = 0; i < numParticles; i++) {
-                particles.push({
+                particles2.push({
                     x: x * (boxSize + spacing) - offsetX + boxSize / 2,
                     y: y * (boxSize + spacing) - offsetY + boxSize / 2,
                     vx: (Math.random() - 0.5) * 2,
                     vy: (Math.random() - 0.5) * 2,
+                    size: 3 + (Math.random() * 5),
                     alpha: 1
                 });
             }
         }
 
+        let fxRunning = false;
         function updateParticles() {
+            fxRunning = true;
+
             particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const p = particles[i];
+
+            for (let i = particles1.length - 1; i >= 0; i--) {
+                const p = particles1[i];
+                p.size -= 2;
+                p.alpha -= 0.01;
+                if (p.alpha <= 0) {
+                    particles1.splice(i, 1);
+                } else {
+                    particleCtx.fillStyle = `rgba(0, 123, 255, ${p.alpha})`;
+                    particleCtx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+                }
+            }
+
+            for (let i = particles2.length - 1; i >= 0; i--) {
+                const p = particles2[i];
                 p.x += p.vx;
                 p.y += p.vy;
                 p.alpha -= 0.02;
                 if (p.alpha <= 0) {
-                    particles.splice(i, 1);
+                    particles2.splice(i, 1);
                 } else {
                     particleCtx.fillStyle = `rgba(0, 123, 255, ${p.alpha})`;
-                    particleCtx.beginPath();
-                    particleCtx.arc(p.x, p.y, 2, 0, Math.PI * 2);
-                    particleCtx.fill();
+                    particleCtx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
                 }
             }
-            if (particles.length > 0) {
+
+            if (particles1.length > 0 || particles2.length > 0) {
                 requestAnimationFrame(updateParticles);
+            } else {
+                fxRunning = false;
             }
         }
 
