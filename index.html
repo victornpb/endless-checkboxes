@@ -12,11 +12,17 @@
             margin: 0;
             overflow: hidden;
             font-family: monospace;
+            background: #ddd;
         }
         canvas {
             display: block;
-            background: #ddd;
             image-rendering: pixelated;
+        }
+        #particleCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
         }
         .scrollbar {
             position: absolute;
@@ -150,7 +156,8 @@
 </head>
 <body>
     <canvas id="gridCanvas"></canvas>
-    
+    <canvas id="particleCanvas"></canvas>
+
     <div class="scrollbar horizontal">
         <div class="arrow left"></div>
         <div class="thumb"></div>
@@ -183,6 +190,9 @@
         <label>
             <input type="checkbox" id="toggleOverlayCheckbox" onclick="toggleOverlay(this.checked)" checked> Show info overlay
         </label>
+        <label>
+            <input type="checkbox" id="toggleParticlesCheckbox" onclick="toggleParticles(this.checked)" checked> Enable particle effects
+        </label>
         <hr>
         <div>
             <label for="jumpX">X: <input type="number" id="jumpX" value="0" step="1" min="-9007199254740991" max="9007199254740991"></label>
@@ -195,8 +205,11 @@
 
     <script>
         const canvas = document.getElementById('gridCanvas');
+        const particleCanvas = document.getElementById('particleCanvas');
         const ctx = canvas.getContext('2d');
+        const particleCtx = particleCanvas.getContext('2d');
         let dpr = 1;
+        let particlesEnabled = true;
 
         let highDpiSupport = true;
 
@@ -206,7 +219,14 @@
             canvas.height = window.innerHeight * dpr;
             canvas.style.width = `${window.innerWidth}px`;
             canvas.style.height = `${window.innerHeight}px`;
-            if (highDpiSupport) ctx.scale(dpr, dpr);
+            particleCanvas.width = canvas.width;
+            particleCanvas.height = canvas.height;
+            particleCanvas.style.width = canvas.style.width;
+            particleCanvas.style.height = canvas.style.height;
+            if (highDpiSupport) {
+                ctx.scale(dpr, dpr);
+                particleCtx.scale(dpr, dpr);
+            }
         }
 
         resizeCanvas();
@@ -270,6 +290,10 @@
             }
         }
 
+        function toggleParticles(bool) {
+            particlesEnabled = bool;
+        }
+
         socket.onopen = () => {
             console.log('WebSocket connection established');
             restorePos();
@@ -288,6 +312,9 @@
             } else {
                 updateGridCell(data);
                 drawGrid();
+                if (particlesEnabled) {
+                    createParticleEffect(data);
+                }
             }
         };
 
@@ -716,6 +743,54 @@
                 func(...args);
             };
         }
+
+        // Particle effect logic
+        const particles = [];
+
+        function createParticleEffect(data) {
+            for (const key in data) {
+                const [x, y] = key.split(',').map(Number);
+                if (data[key]) {
+                    spawnParticles(x, y);
+                    updateParticles();
+                }
+            }
+        }
+
+        function spawnParticles(x, y) {
+            const numParticles = 10;
+            for (let i = 0; i < numParticles; i++) {
+                particles.push({
+                    x: x * (boxSize + spacing) - offsetX + boxSize / 2,
+                    y: y * (boxSize + spacing) - offsetY + boxSize / 2,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2,
+                    alpha: 1
+                });
+            }
+        }
+
+        function updateParticles() {
+            particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 0.02;
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    particleCtx.fillStyle = `rgba(0, 123, 255, ${p.alpha})`;
+                    particleCtx.beginPath();
+                    particleCtx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+                    particleCtx.fill();
+                }
+            }
+            if (particles.length > 0) {
+                requestAnimationFrame(updateParticles);
+            }
+        }
+
     </script>
 </body>
 </html>
