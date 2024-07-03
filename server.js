@@ -5,7 +5,9 @@ const WebSocket = require('ws');
 
 // Constants
 const CHUNK_SIZE = 256;
-const SAVE_INTERVAL = 30000; // 30 seconds
+const MAX_VIEWPORT_SIZE = CHUNK_SIZE * 4;
+
+const SAVE_INTERVAL = 1000 * 30; // 30 seconds
 
 const RATE_LIMIT_TIME_WINDOW = 2000;
 const MAX_REQUESTS_PER_WINDOW = 10;
@@ -17,6 +19,12 @@ const DATA_DIR = path.join(__dirname, 'data');
 const MAP_DIR = path.join(DATA_DIR, 'map');
 const STATS_FILE = path.join(DATA_DIR, 'stats.json');
 const CLIENTS_FILE = path.join(DATA_DIR, 'clients.json');
+
+
+
+const MAX_SAFE_INT = Number.MAX_SAFE_INTEGER;
+const MIN_SAFE_INT = Number.MIN_SAFE_INTEGER;
+
 
 // Create the data directory if it doesn't exist
 if (!fs.existsSync(DATA_DIR)) {
@@ -245,6 +253,28 @@ function sendGridData(viewPort) {
     const { startX, startY, endX, endY } = viewPort;
     const width = endX - startX + 1;
     const height = endY - startY + 1;
+
+    // Ensure width and height are within allowed limits
+    if (width > MAX_VIEWPORT_SIZE || height > MAX_VIEWPORT_SIZE) {
+        return {
+            type: 'error',
+            message: `Viewport size exceeds maximum allowed size of ${MAX_VIEWPORT_SIZE}x${MAX_VIEWPORT_SIZE}`
+        };
+    }
+
+    // Ensure the values are within JavaScript integer limits and respect CHUNK_SIZE constraints
+    if (!Number.isSafeInteger(startX) || !Number.isSafeInteger(startY) ||
+        !Number.isSafeInteger(endX) || !Number.isSafeInteger(endY) ||
+        startX < MIN_SAFE_INT / CHUNK_SIZE || startY < MIN_SAFE_INT / CHUNK_SIZE ||
+        endX > MAX_SAFE_INT / CHUNK_SIZE || endY > MAX_SAFE_INT / CHUNK_SIZE ||
+        width < MIN_SAFE_INT / CHUNK_SIZE || height < MIN_SAFE_INT / CHUNK_SIZE ||
+        width > MAX_SAFE_INT / CHUNK_SIZE || height > MAX_SAFE_INT / CHUNK_SIZE) {
+        return {
+            type: 'error',
+            message: 'Viewport coordinates are not safe integers or exceed allowed limits'
+        };
+    }
+
     const gridArray = new Uint8Array(Math.ceil((width * height) / 8));
 
     for (let y = startY; y <= endY; y++) {
@@ -276,6 +306,7 @@ function sendGridData(viewPort) {
     };
     return message;
 }
+
 
 function isInViewport(x, y, viewport) {
     const { startX, startY, endX, endY } = viewport;
