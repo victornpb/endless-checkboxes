@@ -318,6 +318,11 @@
             }
         };
 
+        socket.onclose = (e)=>{
+            console.log('Conection closed!', e);
+            showMessage('Connection lost! Please refresh', 1000 * 60 * 60);
+        };
+
         function updateStats(stats) {
             debugInfo.playersConnected.textContent = stats.activeConnections;
             debugInfo.totalChunks.textContent = stats.totalChunks;
@@ -435,13 +440,11 @@
             debugInfo.visibleBoxes.textContent = visibleCount;
         }
 
-        function showMessage(message, timeout) {
+        function showMessage(message, timeout=5000) {
             const messageDiv = document.getElementById('message');
             messageDiv.textContent = message;
             messageDiv.style.display = 'block';
-            setTimeout(() => {
-                messageDiv.style.display = 'none';
-            }, timeout || 5000);
+            if (timeout !== -1) setTimeout(() => { messageDiv.style.display = 'none'; }, timeout);
         }
 
         function updateUrlHash() {
