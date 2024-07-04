@@ -18,7 +18,7 @@ const COOLDOWN_RESET_TIME = 60000; // 1 minute to reset cooldown increment
 const DATA_DIR = path.join(__dirname, 'data');
 const MAP_DIR = path.join(DATA_DIR, 'map');
 const STATS_FILE = path.join(DATA_DIR, 'stats.json');
-const CLIENTS_FILE = path.join(DATA_DIR, 'clients.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 
 
@@ -49,14 +49,14 @@ if (fs.existsSync(STATS_FILE)) {
     fs.writeFileSync(STATS_FILE, JSON.stringify(stats));
 }
 
-// Load clients from file
-let clients = {};
+// Load users from file
+let users = {};
 
-if (fs.existsSync(CLIENTS_FILE)) {
-    const data = fs.readFileSync(CLIENTS_FILE);
-    clients = JSON.parse(data);
+if (fs.existsSync(USERS_FILE)) {
+    const data = fs.readFileSync(USERS_FILE);
+    users = JSON.parse(data);
 } else {
-    fs.writeFileSync(CLIENTS_FILE, JSON.stringify(clients));
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users));
 }
 
 // Discover existing chunks
@@ -98,55 +98,59 @@ let clientViewports = new Map(); // Store the viewports of connected clients
 
 wss.on('connection', (socket, req) => {
     const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    socket.ip = ip;
 
     connectionIdInc++;
     activeConnections++;
 
     const currentTime = Date.now();
-    if (!clients[ip]) {
-        clients[ip] = {
-            created: currentTime,
-            lastActivity: currentTime,
-            sessions: 0,
-            messages: 0,
-            clicks: 0,
-            cooldownUntil: 0,
-            cooldownCount: 0,
-            lastCooldown: 0,
-            requests: []
-        };
-    }
-    const client = clients[ip];
-    client.sessions++;
+    if (!users[ip]) users[ip] = {
+        created: currentTime,
+        lastActivity: currentTime,
+        sessions: 0,
+        messages: 0,
+        clicks: 0,
+        cooldownUntil: 0,
+        cooldownCount: 0,
+        lastCooldown: 0,
+        requests: []
+    };
+    
+    const user = users[ip];
+    user.sessions++;
 
     console.log('New client connected!', connectionIdInc, `'${ip}'`);
 
+    // send stats to user on connection
+    const stats = getStats(ip);
+    socket.send(JSON.stringify(stats));
+
     socket.on('message', (message) => {
         const now = Date.now();
-        client.lastActivity = now;
-        client.requests.push(now);
-        client.messages++;
+        user.lastActivity = now;
+        user.requests.push(now);
+        user.messages++;
 
         // Reset cooldown period if no cooldown has been hit in a while
-        if (client.lastCooldown && now - client.lastCooldown > COOLDOWN_RESET_TIME) {
-            client.cooldownCount = 0;
+        if (user.lastCooldown && now - user.lastCooldown > COOLDOWN_RESET_TIME) {
+            user.cooldownCount = 0;
         }
 
-        if (client.cooldownUntil && now < client.cooldownUntil) {
-            socket.send(JSON.stringify({ type: 'error', message: `You are in cooldown period.\nPlease wait ${Math.round((client.cooldownUntil - now) / 1000)} seconds.`, retry: client.cooldownUntil - now }));
+        if (user.cooldownUntil && now < user.cooldownUntil) {
+            socket.send(JSON.stringify({ type: 'error', message: `You are in cooldown period.\nPlease wait ${Math.round((user.cooldownUntil - now) / 1000)} seconds.`, retry: user.cooldownUntil - now }));
             return;
         }
 
         // Remove timestamps older than the time window
-        while (client.requests.length > 0 && client.requests[0] <= now - RATE_LIMIT_TIME_WINDOW) {
-            client.requests.shift();
+        while (user.requests.length > 0 && user.requests[0] <= now - RATE_LIMIT_TIME_WINDOW) {
+            user.requests.shift();
         }
 
-        if (client.requests.length > MAX_REQUESTS_PER_WINDOW) {
-            client.cooldownCount++;
-            client.lastCooldown = now;
-            client.cooldownUntil = now + INITIAL_COOLDOWN_PERIOD * Math.pow(COOLDOWN_INCREMENT_FACTOR, client.cooldownCount - 1);
-            socket.send(JSON.stringify({ type: 'error', message: `Slow down! You exceeded the rate limit.\nWait ${Math.round((client.cooldownUntil - now) / 1000)} seconds.`, retry: client.cooldownUntil - now }));
+        if (user.requests.length > MAX_REQUESTS_PER_WINDOW) {
+            user.cooldownCount++;
+            user.lastCooldown = now;
+            user.cooldownUntil = now + INITIAL_COOLDOWN_PERIOD * Math.pow(COOLDOWN_INCREMENT_FACTOR, user.cooldownCount - 1);
+            socket.send(JSON.stringify({ type: 'error', message: `Slow down! You exceeded the rate limit.\nWait ${Math.round((user.cooldownUntil - now) / 1000)} seconds.`, retry: user.cooldownUntil - now }));
             return;
         }
 
@@ -159,7 +163,7 @@ wss.on('connection', (socket, req) => {
             const key = `${data.x},${data.y}`;
             toggleGridCell(data.x, data.y);
             broadcastGridUpdate(key, getGridCell(data.x, data.y));
-            client.clicks++;
+            user.clicks++;
             stats.globalClickCount++;
         }
     });
@@ -185,13 +189,14 @@ function loadChunk(chunkKey) {
     if (fs.existsSync(chunkPath)) {
         const buffer = fs.readFileSync(chunkPath);
         chunk = new Uint8Array(buffer);
+        console.log(`Loaded Chunk [${chunkKey}]. (Loaded chunks: ${Object.keys(grid).length})`);
     } else {
         chunk = new Uint8Array(Math.ceil((CHUNK_SIZE * CHUNK_SIZE) / 8)); // Using 1 bit per checkbox
         stats.totalChunks++;
+        console.log(`New Chunk [${chunkKey}]. (Loaded chunks: ${Object.keys(grid).length})`);
     }
     grid[chunkKey] = chunk;
 
-    console.log(`Loaded Chunk (${chunkKey}). Total: ${Object.keys(grid).length}`);
     return chunk;
 }
 
@@ -222,7 +227,7 @@ function garbageCollectChunks() {
             saveChunk(chunkKey); // save before unloading
             delete grid[chunkKey];
             unloadedCount++;
-            console.log(`Unloaded Chunk (${chunkKey}). Total: ${Object.keys(grid).length}`);
+            console.log(`Unloaded Chunk [${chunkKey}]. (Loaded chunks: ${Object.keys(grid).length})`);
         }
     }
 }
@@ -271,7 +276,7 @@ function getGridData(viewPort) {
         width > MAX_SAFE_INT / CHUNK_SIZE || height > MAX_SAFE_INT / CHUNK_SIZE) {
         return {
             type: 'error',
-            message: 'Viewport coordinates are not safe integers or exceed allowed limits'
+            message: 'Viewport coordinates exceed allowed limits'
         };
     }
 
@@ -327,22 +332,35 @@ function broadcastGridUpdate(key, value) {
     });
 }
 
-async function sendStats() {
-    const totalCheckboxes = stats.totalChunks * CHUNK_SIZE * CHUNK_SIZE;
-    const statsToSend = {
+function getStats(clientIp) {
+    const globalStats = {
         type: 'stats',
-        activeConnections,
+        totalCheckboxes: stats.totalChunks * CHUNK_SIZE * CHUNK_SIZE,
         totalChunks: stats.totalChunks,
-        totalCheckboxes,
-        globalClickCount: stats.globalClickCount
+        globalClickCount: stats.globalClickCount,
+        activeConnections,
     };
 
+    let userStats = {};
+    const user = users[clientIp];
+    if (user) userStats = {
+        clicks: user.clicks,
+    };
+
+    return {
+        ...globalStats,
+        ...userStats,
+    };
+}
+
+async function broadcastStats() {
     for (const client of wss.clients) {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify(statsToSend));
+            const stats = getStats(client.ip);
+            client.send(JSON.stringify(stats));
         }
     }
-    setTimeout(sendStats, 5000);
+    setTimeout(broadcastStats, 5000);
 }
 
 // Persist statistics to file periodically
@@ -352,13 +370,13 @@ function saveStats() {
 
 // Persist clients to file periodically
 function saveClients() {
-    const clientsString = Object.keys(clients).map(key => `"${key}":${JSON.stringify(clients[key])}`).join(',\n');
+    const clientsString = Object.keys(users).map(key => `"${key}":${JSON.stringify(users[key])}`).join(',\n');
     const formattedClients = `{\n${clientsString}\n}`;
-    fs.writeFileSync(CLIENTS_FILE, formattedClients);
+    fs.writeFileSync(USERS_FILE, formattedClients);
 }
 
 // Send stats to clients periodically
-sendStats();
+broadcastStats();
 
 // Save chunks to disk periodically
 setInterval(saveChunksToDisk, SAVE_INTERVAL);

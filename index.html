@@ -185,6 +185,7 @@
     <div class="overlay" id="overlay" style="display: block;">
         <div>Origin: (<span id="coordX">0</span>, <span id="coordY">0</span>)</div>
         <div>Checkbox: (<span id="mouseX">0</span>, <span id="mouseY">0</span>)</div>
+        <div>User Clicks: <span id="userClicks">0</span></div>
         <hr>
         <div>Loaded Size: <span id="loadedSize">0</span></div>
         <div>Visible Checkboxes: <span id="visibleBoxes">0</span></div>
@@ -279,6 +280,7 @@
             mouseX: document.getElementById('mouseX'),
             mouseY: document.getElementById('mouseY'),
             loadedSize: document.getElementById('loadedSize'),
+            userClicks: document.getElementById('userClicks'),
             totalLoaded: document.getElementById('totalLoaded'),
             visibleBoxes: document.getElementById('visibleBoxes'),
             playersConnected: document.getElementById('playersConnected'),
@@ -355,6 +357,7 @@
 
             debugInfo.playersConnected.textContent = stats.activeConnections;
             debugInfo.totalChunks.textContent = stats.totalChunks;
+            debugInfo.userClicks.textContent = stats.user?.clicks;
 
             document.title = `${stats.totalCheckboxes} Checkboxes`;
         }
