@@ -29,6 +29,7 @@ const MIN_SAFE_INT = Number.MIN_SAFE_INTEGER;
 
 
 let grid = {}; // Store the grid state in chunks
+let dirtyChunk = new Set(); // Keep track of modified chunks and only save modified chunks
 let clientViewports = new Map(); // Store the viewports of connected clients
 let users = {};
 let activeConnections = 0;
@@ -49,9 +50,9 @@ async function main() {
     fs.mkdir(MAP_DIR, { recursive: true });
 
     // Load stuff from disk
+    await loadStats();
     await discoverChunks();
     await loadUsers();
-    await loadStats();
     console.log('Loaded stats from disk', stats);
 
     // Start the server
@@ -70,7 +71,6 @@ async function main() {
     // Unload unused chunks periodically
     setInterval(garbageCollectChunks, SAVE_INTERVAL);
 }
-
 
 // Load statistics from file
 async function loadStats() {
@@ -103,7 +103,7 @@ async function discoverChunks() {
         stats.totalChunks = count;
         console.log(`Discovered ${count} chunks on disk`);
     } catch (error) {
-        console.error("Error discovering chunks:", error);
+        console.error("Error discovering chunks!", error);
     }
 }
 
@@ -220,8 +220,10 @@ async function saveChunksToDisk() {
 }
 
 async function saveChunk(chunkKey) {
+    if (!dirtyChunk.has(chunkKey)) return; // skip writing unmodified chunks
     const chunkPath = path.join(MAP_DIR, `${chunkKey}.chunk`);
     await fs.writeFile(chunkPath, Buffer.from(grid[chunkKey]));
+    dirtyChunk.delete(chunkKey);
 }
 
 async function loadChunk(chunkKey) {
@@ -280,6 +282,7 @@ async function toggleGridCell(x, y) {
     const byteIndex = Math.floor(index / 8);
     const bitIndex = index % 8;
     chunk[byteIndex] ^= (1 << bitIndex); // Toggle the specific bit
+    dirtyChunk.set(chunkKey); // flag chunk as modified
 }
 
 async function getGridCell(x, y) {
