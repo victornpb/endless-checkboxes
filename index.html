@@ -551,14 +551,17 @@
             clearTimeout(inactivityTimer);
             inactivityTimer = setTimeout(() => {
                 updateHashWithCoordinates();
-            }, 1000 * 10);
+            }, 1000 * 30);
         }
-
+        
         function updateHashWithCoordinates() {
             const viewPort = getViewPort();
             const newHash = `${viewPort.startX},${viewPort.startY}`;
             if (window.location.hash.substring(1) !== newHash) {
+                const title = document.title;
+                document.title = `(${newHash}) ${title}`;
                 history.pushState(null, '', `#${newHash}`);
+                document.title = title;
             }
         }
 
@@ -611,6 +614,9 @@
                 y: (e.clientY - rect.top) * scaleY
             };
         }
+
+        document.body.addEventListener('mouseleave', updateHashWithCoordinates);
+        window.addEventListener('blur', updateHashWithCoordinates);
 
         // Pointer events
         canvas.addEventListener('pointerdown', (e) => {
