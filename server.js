@@ -189,11 +189,11 @@ function loadChunk(chunkKey) {
     if (fs.existsSync(chunkPath)) {
         const buffer = fs.readFileSync(chunkPath);
         chunk = new Uint8Array(buffer);
-        console.log(`Loaded Chunk [${chunkKey}]. (Loaded chunks: ${Object.keys(grid).length})`);
+        console.log(`Chunk [${chunkKey}] has been loaded. (Chunks in memory: ${Object.keys(grid).length})`);
     } else {
         chunk = new Uint8Array(Math.ceil((CHUNK_SIZE * CHUNK_SIZE) / 8)); // Using 1 bit per checkbox
         stats.totalChunks++;
-        console.log(`New Chunk [${chunkKey}]. (Loaded chunks: ${Object.keys(grid).length})`);
+        console.log(`Chunk [${chunkKey}] has been created. (Chunks in memory: ${Object.keys(grid).length})`);
     }
     grid[chunkKey] = chunk;
 
@@ -213,24 +213,33 @@ function saveChunk(chunkKey) {
 
 function garbageCollectChunks() {
     const activeChunks = new Set();
-    for (const viewport of clientViewports.values()) {
-        for (let y = viewport.startY; y <= viewport.endY; y += CHUNK_SIZE) {
-            for (let x = viewport.startX; x <= viewport.endX; x += CHUNK_SIZE) {
-                activeChunks.add(getChunkKey(x, y));
+
+    console.log('Starting garbage collection...');
+    for (const [client, viewport] of clientViewports.entries()) {
+        console.log(`Processing viewport for client: ${client.ip}`);
+        for (let y = Math.floor(viewport.startY / CHUNK_SIZE) * CHUNK_SIZE; y <= viewport.endY; y += CHUNK_SIZE) {
+            for (let x = Math.floor(viewport.startX / CHUNK_SIZE) * CHUNK_SIZE; x <= viewport.endX; x += CHUNK_SIZE) {
+                const chunkKey = getChunkKey(x, y);
+                activeChunks.add(chunkKey);
+                // console.log(`Viewport ${JSON.stringify(viewport)} includes chunk ${chunkKey}`);
             }
         }
     }
-    
+
     let unloadedCount = 0;
     for (const chunkKey in grid) {
         if (!activeChunks.has(chunkKey)) {
             saveChunk(chunkKey); // save before unloading
             delete grid[chunkKey];
             unloadedCount++;
-            console.log(`Unloaded Chunk [${chunkKey}]. (Loaded chunks: ${Object.keys(grid).length})`);
+            console.log(`Chunk [${chunkKey}] has been unloaded. (Chunks in memory: ${Object.keys(grid).length})`);
+        } else {
+            // console.log(`Chunk [${chunkKey}] is still active and not unloaded.`);
         }
     }
+    // console.log(`Garbage collection completed. Unloaded ${unloadedCount} chunks.`);
 }
+
 
 function toggleGridCell(x, y) {
     const chunkKey = getChunkKey(x, y);
