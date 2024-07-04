@@ -185,11 +185,13 @@
     <div class="overlay" id="overlay" style="display: block;">
         <div>Origin: (<span id="coordX">0</span>, <span id="coordY">0</span>)</div>
         <div>Checkbox: (<span id="mouseX">0</span>, <span id="mouseY">0</span>)</div>
+        <hr>
         <div>Loaded Size: <span id="loadedSize">0</span></div>
-        <div>Loaded Checkboxes: <span id="totalLoaded">0</span></div>
         <div>Visible Checkboxes: <span id="visibleBoxes">0</span></div>
-        
+        <div>Loaded Checkboxes: <span id="totalLoaded">0</span></div>
         <div>Total Chunks: <span id="totalChunks">0</span></div>
+        <hr>
+        <div>Updates/s: <span id="fps">0</span></div>
     </div>
 
     <div id="title">
@@ -202,6 +204,9 @@
     <div class="fab-menu" id="fabMenu">
         <label>
             <input type="checkbox" id="toggleOverlayCheckbox" onclick="toggleOverlay(this.checked)" checked> Show info overlay
+        </label>
+        <label>
+            <input type="checkbox" id="toggleCachedCanvasCheckbox" onclick="toggleCachedCanvas(this.checked)"> Use cached canvas
         </label>
         <label>
             <input type="checkbox" id="toggleParticlesCheckbox" onclick="toggleParticles(this.checked)" checked> Enable particle effects
@@ -409,11 +414,70 @@
             return (gridData[byteIndex] & (1 << bitIndex)) !== 0 ? 1 : 0;
         }
 
-        function drawGrid() {
 
+
+        // Create off-canvas images for checked and unchecked checkboxes
+        const createCheckboxImage = (isChecked) => {
+            dpr = highDpiSupport ? (window.devicePixelRatio || 1) : 1;
+
+            const offCanvas = document.createElement('canvas');
+            const offCtx = offCanvas.getContext('2d');
+            offCanvas.width = boxSize * dpr;
+            offCanvas.height = boxSize * dpr;
+            offCtx.scale(dpr, dpr);
+
+            const inset = 2; // Example value, adjust as needed
+            const borderWidth = 1;
+
+            // Draw border rectangle
+            offCtx.fillStyle = '#888';
+            offCtx.fillRect(inset, inset, boxSize - (inset * 2), boxSize - (inset * 2));
+
+            // Draw inner rectangle (the checkbox fill)
+            offCtx.fillStyle = isChecked ? '#007bff' : 'white';
+            offCtx.fillRect(inset + borderWidth, inset + borderWidth, boxSize - (borderWidth * 2) - (inset * 2), boxSize - (borderWidth * 2) - (inset * 2));
+
+            // Draw check mark if checked
+            if (isChecked) {
+                offCtx.strokeStyle = 'white';
+                offCtx.lineWidth = boxSize / 8; // Scale line width
+
+                const innerSize = boxSize - (borderWidth * 2) - (inset * 2);
+                const innerX = inset + borderWidth;
+                const innerY = inset + borderWidth;
+
+                offCtx.beginPath();
+                offCtx.moveTo(innerX + (innerSize / 6), innerY + (innerSize / 2)); // Adjust start point
+                offCtx.lineTo(innerX + (innerSize / 2.5), innerY + innerSize - (innerSize / 5)); // Adjust midpoint
+                offCtx.lineTo(innerX + innerSize - (innerSize / 6), innerY + (innerSize / 6)); // Adjust end point
+                offCtx.stroke();
+            }
+
+            return offCanvas;
+        };
+
+        // Cached images
+        const checkedCheckboxImage = createCheckboxImage(true);
+        const uncheckedCheckboxImage = createCheckboxImage(false);
+
+
+        let useCachedCanvas = false;
+
+        function toggleCachedCanvas(enabled) {
+            useCachedCanvas = enabled;
+            drawGrid();
+        }
+
+        const fpsElm = document.querySelector('#fps');
+        const tick = microFps((info) => {
+            const fps = info.fps.toFixed(2);
+            console.log(`FPS: ${fps}`);
+            fpsElm.textContent = fps;
+        }, 1);
+
+        function drawGrid() {
             ctx.fillStyle = "#ddd";
-            ctx.fillRect(0, 0, canvas.width, canvas.height); // don't use opacity, supposedely faster even tho i didnt measure it but makes sense
-            // ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, canvas.width, canvas.height); // don't use opacity, supposedly faster even though I didn't measure it but makes sense
 
             const viewPort = getViewPort();
             let visibleCount = 0;
@@ -429,47 +493,51 @@
                         const drawY = (coordY * (boxSize + spacing) - offsetY) << 0;
 
                         visibleCount++;
-                        
-                        const r1 = ()=>{
+
+                        if (useCachedCanvas) {
+                            // Draw the checkbox from off-canvas images
+                            const image = isChecked ? checkedCheckboxImage : uncheckedCheckboxImage;
+                            ctx.drawImage(image, drawX, drawY, boxSize, boxSize);
+                        } else {
+                            // Original drawing method
                             // Draw border rectangle
                             ctx.fillStyle = '#888';
                             ctx.fillRect(drawX + inset, drawY + inset, boxSize - (inset * 2), boxSize - (inset * 2));
-                        }; r1();
 
-                        // Draw inner rectangle (the checkbox fill)
-                        const borderWidth = 1;
-                        
-                        const r2 = ()=>{
+                            // Draw inner rectangle (the checkbox fill)
+                            const borderWidth = 1;
                             ctx.fillStyle = isChecked ? '#007bff' : 'white';
                             ctx.fillRect(drawX + inset + borderWidth, drawY + inset + borderWidth, boxSize - (borderWidth * 2) - (inset * 2), boxSize - (borderWidth * 2) - (inset * 2));
-                        }; r2();
 
-                        // Draw check mark if checked
-                        if (isChecked) {
-                            ctx.strokeStyle = 'white';
-                            ctx.lineWidth = boxSize / 8; // Scale line width
+                            // Draw check mark if checked
+                            if (isChecked) {
+                                ctx.strokeStyle = 'white';
+                                ctx.lineWidth = boxSize / 8; // Scale line width
 
-                            const innerSize = boxSize - (borderWidth * 2) - (inset * 2);
-                            const innerX = drawX + inset + borderWidth;
-                            const innerY = drawY + inset + borderWidth;
-                            
-                            ctx.beginPath();
-                            ctx.moveTo(innerX + (innerSize / 6), innerY + (innerSize / 2)); // Adjust start point
-                            ctx.lineTo(innerX + (innerSize / 2.5), innerY + innerSize - (innerSize / 5)); // Adjust midpoint
-                            ctx.lineTo(innerX + innerSize - (innerSize / 6), innerY + (innerSize / 6)); // Adjust end point
-                            ctx.stroke();
+                                const innerSize = boxSize - (borderWidth * 2) - (inset * 2);
+                                const innerX = drawX + inset + borderWidth;
+                                const innerY = drawY + inset + borderWidth;
+
+                                ctx.beginPath();
+                                ctx.moveTo(innerX + (innerSize / 6), innerY + (innerSize / 2)); // Adjust start point
+                                ctx.lineTo(innerX + (innerSize / 2.5), innerY + innerSize - (innerSize / 5)); // Adjust midpoint
+                                ctx.lineTo(innerX + innerSize - (innerSize / 6), innerY + (innerSize / 6)); // Adjust end point
+                                ctx.stroke();
+                            }
                         }
                     }
                 }
             }
-
+            
             // Update overlay info
             debugInfo.coordX.textContent = viewPort.startX;
             debugInfo.coordY.textContent = viewPort.startY;
             debugInfo.loadedSize.textContent = `${loadedViewport.width} x ${loadedViewport.height}`;
             debugInfo.totalLoaded.textContent = totalCount;
             debugInfo.visibleBoxes.textContent = visibleCount;
+            tick();
         }
+
 
         function showMessage(message, timeout=5000) {
             const messageBackdrop = document.querySelector('.message-backdrop');
@@ -883,6 +951,48 @@
                 fxRunning = false;
             }
         }
+
+
+
+        function microFps(callback, refreshRate = 1) {
+            if (typeof callback !== 'function') throw new Error('Callback is not a function');
+            if (typeof refreshRate !== 'number' || isNaN(refreshRate) || refreshRate < 0 || refreshRate === Infinity) throw new Error('refreshRate should be a positive number! e.g. 2 (fps)');
+            let frames = -1;
+            let trigger = 0;
+            let lastTimestamp;
+            let lastFps = 0;
+            let jitter = 0;
+            const millis = (typeof performance === 'object' && 'now' in performance) ? performance.now.bind(performance) : Date.now.bind(Date);
+            const info = { fps: 0, jitter: 0, elapsed: 0, frames: frames, trigger: trigger };
+            function fpsMeterTick() {
+                if (frames >= trigger) {
+                    const now = millis();
+                    if (lastTimestamp === undefined) lastTimestamp = now;
+                    const elapsed = now - lastTimestamp;
+                    if (elapsed > 0) {
+                        const fps = frames > 0 ? 1000 / (elapsed / frames) : 0;
+                        jitter = Math.abs(lastFps - fps);
+                        if (refreshRate > 0) {
+                            trigger = (trigger * 0.5) + ((fps / refreshRate) * 0.5);
+                            if (trigger < 0) trigger = 0;
+                        } else {
+                            trigger = 0;
+                        }
+                        info.fps = fps; info.jitter = jitter; info.elapsed = elapsed; info.frames = frames; info.trigger = trigger;
+                        lastTimestamp = now;
+                        lastFps = fps;
+                        frames = 0;
+                        callback(info);
+                    } else {
+                        trigger *= 2;
+                    }
+                }
+                frames++;
+            }
+            fpsMeterTick.info = info;
+            return fpsMeterTick;
+        }
+
     </script>
 </body>
 </html>
