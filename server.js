@@ -4,6 +4,8 @@ const path = require('path');
 const WebSocket = require('ws');
 
 // Constants
+const PORT = 8080;
+
 const CHUNK_SIZE = 256;
 const MAX_VIEWPORT_SIZE = CHUNK_SIZE * 4;
 
@@ -23,17 +25,52 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const MAX_SAFE_INT = Number.MAX_SAFE_INTEGER;
 const MIN_SAFE_INT = Number.MIN_SAFE_INTEGER;
 
-// Create the data directory if it doesn't exist
-fs.mkdir(DATA_DIR, { recursive: true });
 
-// Create the map directory if it doesn't exist
-fs.mkdir(MAP_DIR, { recursive: true });
 
+
+let grid = {}; // Store the grid state in chunks
+let clientViewports = new Map(); // Store the viewports of connected clients
+let users = {};
+let activeConnections = 0;
+let connectionIdInc = 0;
 let stats = {
     globalClickCount: 0,
     totalChunks: 0,
     uniqueUsers: 0,
 };
+
+
+async function main() {
+
+    // Create the data directory if it doesn't exist
+    fs.mkdir(DATA_DIR, { recursive: true });
+
+    // Create the map directory if it doesn't exist
+    fs.mkdir(MAP_DIR, { recursive: true });
+
+    // Load stuff from disk
+    await discoverChunks();
+    await loadUsers();
+    await loadStats();
+    console.log('Loaded stats from disk', stats);
+
+    // Start the server
+    server.listen(PORT, () => {
+        console.log(`Server is listening on http://localhost:${PORT}`);
+    });
+    
+    // Send stats to clients periodically
+    broadcastStats();
+    // Save chunks to disk periodically
+    setInterval(saveChunksToDisk, SAVE_INTERVAL);
+    // Save stats to disk periodically
+    setInterval(saveStats, SAVE_INTERVAL);
+    // Save clients to disk periodically
+    setInterval(saveClients, SAVE_INTERVAL);
+    // Unload unused chunks periodically
+    setInterval(garbageCollectChunks, SAVE_INTERVAL);
+}
+
 
 // Load statistics from file
 async function loadStats() {
@@ -44,8 +81,6 @@ async function loadStats() {
         await fs.writeFile(STATS_FILE, JSON.stringify(stats));
     }
 }
-
-let users = {};
 
 // Load users from file
 async function loadUsers() {
@@ -60,7 +95,6 @@ async function loadUsers() {
     }
 }
 
-
 // Discover existing chunks
 async function discoverChunks() {
     try {
@@ -72,12 +106,6 @@ async function discoverChunks() {
         console.error("Error discovering chunks:", error);
     }
 }
-
-await loadUsers();
-await discoverChunks();
-await loadStats();
-
-console.log(stats);
 
 // Create an HTTP server
 const server = http.createServer(async (req, res) => {
@@ -97,13 +125,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 // Create a WebSocket server
-let activeConnections = 0;
-let connectionIdInc = 0;
 const wss = new WebSocket.Server({ server });
-
-let grid = {}; // Store the grid state in chunks
-let clientViewports = new Map(); // Store the viewports of connected clients
-
 wss.on('connection', (socket, req) => {
     const ip = req.socket.remoteAddress;// || req.headers['x-forwarded-for'];
     socket.ip = ip;
@@ -192,6 +214,16 @@ function getChunkKey(x, y) {
     return `${chunkX},${chunkY}`;
 }
 
+async function saveChunksToDisk() {
+    const savePromises = Object.keys(grid).map(chunkKey => saveChunk(chunkKey));
+    await Promise.all(savePromises);
+}
+
+async function saveChunk(chunkKey) {
+    const chunkPath = path.join(MAP_DIR, `${chunkKey}.chunk`);
+    await fs.writeFile(chunkPath, Buffer.from(grid[chunkKey]));
+}
+
 async function loadChunk(chunkKey) {
     if (grid[chunkKey]) return grid[chunkKey];
 
@@ -209,16 +241,6 @@ async function loadChunk(chunkKey) {
     grid[chunkKey] = chunk;
 
     return chunk;
-}
-
-async function saveChunksToDisk() {
-    const savePromises = Object.keys(grid).map(chunkKey => saveChunk(chunkKey));
-    await Promise.all(savePromises);
-}
-
-async function saveChunk(chunkKey) {
-    const chunkPath = path.join(MAP_DIR, `${chunkKey}.chunk`);
-    await fs.writeFile(chunkPath, Buffer.from(grid[chunkKey]));
 }
 
 async function garbageCollectChunks() {
@@ -240,14 +262,12 @@ async function garbageCollectChunks() {
     const unloadPromises = [];
     for (const chunkKey in grid) {
         if (!activeChunks.has(chunkKey)) {
-            unloadPromises.push(saveChunk(chunkKey).then(() => {
-                delete grid[chunkKey];
-                unloadedCount++;
-                console.log(`Chunk [${chunkKey}] has been unloaded. (Chunks in memory: ${Object.keys(grid).length})`);
-            }));
+            await saveChunk(chunkKey);
+            delete grid[chunkKey];
+            unloadedCount++;
+            console.log(`Chunk [${chunkKey}] has been unloaded. (Chunks in memory: ${Object.keys(grid).length})`);
         }
     }
-    await Promise.all(unloadPromises);
 }
 
 
@@ -394,25 +414,6 @@ async function saveClients() {
     await fs.writeFile(USERS_FILE, formattedClients);
 }
 
-// Send stats to clients periodically
-broadcastStats();
-
-// Save chunks to disk periodically
-setInterval(saveChunksToDisk, SAVE_INTERVAL);
-// Save stats to disk periodically
-setInterval(saveStats, SAVE_INTERVAL);
-// Save clients to disk periodically
-setInterval(saveClients, SAVE_INTERVAL);
-
-// Unload unused chunks periodically
-setInterval(garbageCollectChunks, SAVE_INTERVAL);
-
-// Start the server
-const port = 8080;
-server.listen(port, () => {
-    console.log(`Server is listening on http://localhost:${port}`);
-});
-
 function delay(ms) {
     return new Promise(r => setTimeout(r, ms));
 }
@@ -421,3 +422,5 @@ function delay(ms) {
 function rand(min, max) {
     return Math.floor(Math.random() * (max - min + 1) + min);
 }
+
+main();
