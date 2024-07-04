@@ -1,6 +1,6 @@
-const http = require('http');
 const fs = require('fs').promises;
 const path = require('path');
+const http = require('http');
 const WebSocket = require('ws');
 
 // Constants
@@ -15,7 +15,7 @@ const RATE_LIMIT_TIME_WINDOW = 2000;
 const MAX_REQUESTS_PER_WINDOW = 10;
 const INITIAL_COOLDOWN_PERIOD = 3000; // cooldown
 const COOLDOWN_INCREMENT_FACTOR = 2; // Cooldown period will double each time
-const COOLDOWN_RESET_TIME = 60000; // 1 minute to reset cooldown increment
+const COOLDOWN_RESET_FACTOR = 2; // User cooldown increments will be forgiven after the last cooldown duration time this factor. (e.g. for 2, user has to wait 6s after receiving a 3s cooldown, otherwise it will keep going up)
 
 const DATA_DIR = path.join(__dirname, 'data');
 const MAP_DIR = path.join(DATA_DIR, 'map');
@@ -24,7 +24,6 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 const MAX_SAFE_INT = Number.MAX_SAFE_INTEGER;
 const MIN_SAFE_INT = Number.MIN_SAFE_INTEGER;
-
 
 
 
@@ -164,8 +163,9 @@ wss.on('connection', (socket, req) => {
         user.requests.push(now);
         user.messages++;
 
-        // Reset cooldown period if no cooldown has been hit in a while
-        if (user.lastCooldown && now - user.lastCooldown > COOLDOWN_RESET_TIME) {
+        // Reset cooldown increase if no cooldown has been hit in a while
+        const cooldownDuration = INITIAL_COOLDOWN_PERIOD * Math.pow(COOLDOWN_INCREMENT_FACTOR, user.cooldownCount);
+        if (user.lastCooldown && now - user.lastCooldown > cooldownDuration * COOLDOWN_RESET_FACTOR) {
             user.cooldownCount = 0;
         }
 
@@ -182,7 +182,7 @@ wss.on('connection', (socket, req) => {
         if (user.requests.length > MAX_REQUESTS_PER_WINDOW) {
             user.cooldownCount++;
             user.lastCooldown = now;
-            user.cooldownUntil = now + INITIAL_COOLDOWN_PERIOD * Math.pow(COOLDOWN_INCREMENT_FACTOR, user.cooldownCount - 1);
+            user.cooldownUntil = now + cooldownDuration;
             socket.send(JSON.stringify({ type: 'error', message: `Slow down! You exceeded the rate limit.\nWait ${Math.round((user.cooldownUntil - now) / 1000)} seconds.`, retry: user.cooldownUntil - now }));
             return;
         }
@@ -282,7 +282,7 @@ async function toggleGridCell(x, y) {
     const byteIndex = Math.floor(index / 8);
     const bitIndex = index % 8;
     chunk[byteIndex] ^= (1 << bitIndex); // Toggle the specific bit
-    dirtyChunk.set(chunkKey); // flag chunk as modified
+    dirtyChunk.add(chunkKey); // flag chunk as modified
 }
 
 async function getGridCell(x, y) {
