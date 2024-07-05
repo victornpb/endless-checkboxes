@@ -154,8 +154,8 @@ wss.on('connection', (socket, req) => {
     console.log('New client connected!', connectionIdInc, `'${ip}'`);
 
     // send stats to user on connection
-    const stats = getStats(ip);
-    socket.send(JSON.stringify(stats));
+    const s = getStats(ip);
+    socket.send(JSON.stringify(s));
 
     socket.on('message', async (message) => {
         const now = Date.now();
