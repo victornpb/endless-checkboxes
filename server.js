@@ -221,26 +221,27 @@ async function saveChunksToDisk() {
 
 async function saveChunk(chunkKey) {
     if (!dirtyChunk.has(chunkKey)) return; // skip writing unmodified chunks
+    dirtyChunk.delete(chunkKey);
     const chunkPath = path.join(MAP_DIR, `${chunkKey}.chunk`);
     await fs.writeFile(chunkPath, Buffer.from(grid[chunkKey]));
-    dirtyChunk.delete(chunkKey);
 }
 
 async function loadChunk(chunkKey) {
     if (grid[chunkKey]) return grid[chunkKey];
 
-    const chunkPath = path.join(MAP_DIR, `${chunkKey}.chunk`);
     let chunk;
     try {
+        const chunkPath = path.join(MAP_DIR, `${chunkKey}.chunk`);
         const buffer = await fs.readFile(chunkPath);
         chunk = new Uint8Array(buffer);
+        grid[chunkKey] = chunk;
         console.log(`Chunk [${chunkKey}] has been loaded. (Chunks in memory: ${Object.keys(grid).length})`);
     } catch (error) {
         chunk = new Uint8Array(Math.ceil((CHUNK_SIZE * CHUNK_SIZE) / 8)); // Using 1 bit per checkbox
+        grid[chunkKey] = chunk;
         stats.totalChunks++;
         console.log(`Chunk [${chunkKey}] has been created. (Chunks in memory: ${Object.keys(grid).length})`);
     }
-    grid[chunkKey] = chunk;
 
     return chunk;
 }
@@ -248,20 +249,16 @@ async function loadChunk(chunkKey) {
 async function garbageCollectChunks() {
     const activeChunks = new Set();
 
-    // console.log('Starting garbage collection...');
     for (const [client, viewport] of clientViewports.entries()) {
-        // console.log(`Processing viewport for client: ${client.ip}`);
         for (let y = Math.floor(viewport.startY / CHUNK_SIZE) * CHUNK_SIZE; y <= viewport.endY; y += CHUNK_SIZE) {
             for (let x = Math.floor(viewport.startX / CHUNK_SIZE) * CHUNK_SIZE; x <= viewport.endX; x += CHUNK_SIZE) {
                 const chunkKey = getChunkKey(x, y);
                 activeChunks.add(chunkKey);
-                // console.log(`Viewport ${JSON.stringify(viewport)} includes chunk ${chunkKey}`);
             }
         }
     }
 
     let unloadedCount = 0;
-    const unloadPromises = [];
     for (const chunkKey in grid) {
         if (!activeChunks.has(chunkKey)) {
             await saveChunk(chunkKey);
